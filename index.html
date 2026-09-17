@@ -186,7 +186,7 @@
 </main>
 
 <footer>
-  Oficiales y Suboficiales se leen en vivo desde la planilla de guarniciones (columna R de cada pestaña) · Haberes básicos leídos en vivo desde la planilla de aumentos, columna del mes seleccionado.
+  Oficiales y Suboficiales se leen en vivo desde la planilla de guarniciones (columna R de cada pestaña) · Los haberes básicos de enero a diciembre de 2026 están incorporados en esta herramienta.
   Los Soldados Voluntarios (todos grado VP) se toman de la cantidad fija por guarnición cargada en la herramienta.
   Ninguna planilla de origen se escribe ni modifica: esta herramienta solo lee.
 </footer>
@@ -194,8 +194,6 @@
 <script>
 /* ==================== CONFIG ==================== */
 const SHEET_PERSONAL_ID = '1iIVBTWeOpdtp2Np13KbkgHXsxgHNTpt2iuz8r_3XVQY';
-const SHEET_HABERES_ID  = '1nKymrJqwL9mhRl8y-X54RKsAaxbpRY3N1Yj5lXeAeYo';
-const HABERES_TAB = 'Aumentos';
 const TABS = [
   { name: 'Oficiales',    tipo: 'Oficial' },
   { name: 'Suboficiales', tipo: 'Suboficial' }
@@ -204,6 +202,31 @@ const TIPOS = ['Oficial', 'Suboficial', 'Soldado Voluntario'];
 const GRADO_SOLDADO = 'Voluntario de Primera (VP)';
 const LS_PCT = 'ezz_pct_matrix_v2';
 const LS_MAP = 'ezz_grado_map_v1';
+
+// Haberes básicos mensuales 2026. Fuente: tabla suministrada para esta herramienta.
+// Diciembre 2025 fue excluido. SI febrero fue corregido a $1.037.778.
+const MONTH_HEADERS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const HABERES_2026 = {
+  TG:[2937768,3002399,3062447,3114509,3161227,3237096,3308312,3371170,3603781,3668649,3727347,3783257],
+  GD:[2619843,2677480,2731030,2777458,2819120,2886779,2950288,3006343,3213777,3271625,3323971,3373831],
+  GB:[2386936,2439449,2487218,2529501,2567444,2630140,2688003,2739075,2928070,2980776,3028468,3073895],
+  CR:[2090746,2136742,2179477,2216528,2249776,2303771,2354454,2399189,2564734,2610899,2652673,2692463],
+  TC:[1817803,1857795,1894951,1927165,1956072,2003018,2047084,2085979,2229911,2270049,2306370,2340965],
+  MY:[1432126,1463633,1492906,1518285,1541059,1578044,1612761,1643403,1756799,1788422,1817036,1844292],
+  CT:[1186083,1212177,1236421,1257440,1276302,1306933,1335686,1361064,1454977,1481166,1504865,1527438],
+  TP:[1054952,1078161,1099724,1118419,1135195,1162440,1188014,1210586,1294116,1317410,1338489,1358566],
+  TT:[951074,971998,991438,1008292,1023416,1047978,1071034,1091384,1166689,1187689,1206693,1224793],
+  ST:[861362,880312,897918,913183,926881,949126,970007,988437,1056639,1075658,1092869,1109262],
+  SM:[1468881,1501196,1531220,1557251,1580610,1618545,1654153,1685582,1801888,1834322,1863671,1891626],
+  SP:[1302199,1330847,1357464,1380541,1401249,1434879,1466446,1494308,1597415,1626169,1652187,1676970],
+  SA:[1154418,1179815,1202391,1222832,1241174,1272040,1300025,1324725,1416131,1441621,1464687,1486658],
+  SI:[1015438,1037778,1058534,1076529,1092677,1118901,1143517,1165244,1245644,1268066,1288355,1307680],
+  SG:[911633,931689,950323,966478,980975,1004518,1026617,1046123,1118307,1138436,1156651,1174001],
+  CI:[818138,836137,852860,867359,880369,901498,921331,938836,1003613,1021678,1038025,1053595],
+  CB:[757233,773892,789370,802789,814831,834387,852744,868946,928903,945624,960754,975165],
+  VP:[689737,704911,719009,731232,742200,760013,776733,791491,846105,861335,875116,888243],
+  VS:[638288,652330,665377,676688,686838,703322,718795,732452,782992,797086,809839,821987]
+};
 
 // % de zona de referencia sobre el haber básico, por guarnición.
 const DEFAULT_PCT_RAW = [
@@ -253,8 +276,8 @@ const SOLDADOS_VP_RAW = [
 
 /* ==================== STATE ==================== */
 let personas = [];          // filas de Oficiales/Suboficiales + filas agregadas de Soldados VP
-let haberesMap = {};        // normGrado -> { label, valuesByHeader }
-let monthHeaders = [];      // columnas de mes disponibles en la planilla de haberes
+let haberesMap = {};        // código de grado -> { label, valuesByHeader }
+let monthHeaders = [...MONTH_HEADERS];
 let selectedMonth = null;
 let guarniciones = [];      // lista única de guarniciones (siempre subconjunto de las 85 + CABA)
 let pctMatrix = {};         // guarnicion -> % (un solo valor, aplicado a todos los tipos)
@@ -321,22 +344,36 @@ async function fetchCSV(url){
   });
 }
 
-/* detección de mes (solo para elegir el default; la lista de opciones incluye todas las columnas) */
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-const ABBR = { ene:'enero', feb:'febrero', mar:'marzo', abr:'abril', may:'mayo', jun:'junio',
-               jul:'julio', ago:'agosto', sep:'septiembre', set:'septiembre', oct:'octubre',
-               nov:'noviembre', dic:'diciembre' };
-function monthKeyFromHeader(h){
-  const n = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-  for (const full of MESES) if (n.startsWith(full)) return full;
-  for (const [abbr, full] of Object.entries(ABBR)) if (n.startsWith(abbr)) return full;
-  return null;
+
+function buildHaberesMap(){
+  haberesMap = {};
+  for (const [code, values] of Object.entries(HABERES_2026)) {
+    const valuesByHeader = {};
+    MONTH_HEADERS.forEach((month, index) => valuesByHeader[month] = values[index]);
+    haberesMap[code] = { label: code, valuesByHeader };
+  }
 }
-const EXCLUDE_HEADERS = ['Nro','Grados','Prom Aum Mensual'];
+
+function gradoCode(gradoRaw){
+  const n = normalize(gradoRaw);
+  if (HABERES_2026[n]) return n;
+  const parenthetical = n.match(/\b(TG|GD|GB|CR|TC|MY|CT|TP|TT|ST|SM|SP|SA|SI|SG|CI|CB|VP|VS)\b/);
+  if (parenthetical) return parenthetical[1];
+  const aliases = {
+    'TENIENTE GENERAL':'TG','GENERAL DE DIVISION':'GD','GENERAL DE BRIGADA':'GB','CORONEL':'CR',
+    'TENIENTE CORONEL':'TC','MAYOR':'MY','CAPITAN':'CT','TENIENTE PRIMERO':'TP','TENIENTE':'TT',
+    'SUBTENIENTE':'ST','SUBOFICIAL MAYOR':'SM','SUBOFICIAL PRINCIPAL':'SP','SARGENTO AYUDANTE':'SA',
+    'SARGENTO PRIMERO':'SI','SARGENTO':'SG','CABO PRIMERO':'CI','CABO':'CB',
+    'VOLUNTARIO DE PRIMERA':'VP','VOLUNTARIO DE SEGUNDA':'VS','SOLDADO VOLUNTARIO DE PRIMERA':'VP',
+    'SOLDADO VOLUNTARIO DE SEGUNDA':'VS'
+  };
+  return aliases[n] || null;
+}
 
 /* ==================== LOAD ==================== */
 async function loadAll(){
-  setStatus('Leyendo planillas de Google Sheets…');
+  setStatus('Leyendo la planilla de personal…');
   document.getElementById('kpis').style.display = 'none';
   document.getElementById('mainGrid').style.display = 'none';
   document.getElementById('gradoSection').style.display = 'none';
@@ -377,25 +414,13 @@ async function loadAll(){
       });
     }
 
-    // -- haberes --
-    const hRows = await fetchCSV(gvizUrl(SHEET_HABERES_ID, HABERES_TAB));
-    if (hRows.length === 0) throw new Error('La pestaña "' + HABERES_TAB + '" no devolvió filas.');
-    const headers = Object.keys(hRows[0]);
-    monthHeaders = headers.filter(h => !EXCLUDE_HEADERS.includes(h.trim()) && h.trim() !== '');
-    haberesMap = {};
-    for (const r of hRows) {
-      const gradoLabel = (r['Grados'] || '').trim();
-      if (!gradoLabel) continue;
-      const norm = normalize(gradoLabel);
-      const valuesByHeader = {};
-      for (const h of monthHeaders) valuesByHeader[h] = parseARNumber(r[h]);
-      haberesMap[norm] = { label: gradoLabel, valuesByHeader };
-    }
+    // -- haberes incorporados --
+    buildHaberesMap();
 
     // month select — se listan TODAS las columnas de mes encontradas
     const now = new Date();
     const currentMonthKey = MESES[now.getMonth()];
-    let defaultHeader = monthHeaders.find(h => monthKeyFromHeader(h) === currentMonthKey) || monthHeaders[monthHeaders.length - 1];
+    let defaultHeader = monthHeaders.find(h => h === currentMonthKey) || monthHeaders[monthHeaders.length - 1];
     const sel = document.getElementById('monthSelect');
     sel.innerHTML = monthHeaders.map(h => `<option value="${escapeAttr(h)}">${h}</option>`).join('');
     sel.value = defaultHeader;
@@ -410,7 +435,7 @@ async function loadAll(){
     renderAll();
   } catch (err) {
     console.error(err);
-    setStatus('No se pudieron leer las planillas: ' + err.message + '. Verificá que ambas estén compartidas como "Cualquiera con el enlace: Lector" y que los nombres de pestaña coincidan exactamente.', true);
+    setStatus('No se pudo leer la planilla de personal: ' + err.message + '. Verificá que esté compartida como "Cualquiera con el enlace: Lector" y que las pestañas Oficiales y Suboficiales existan.', true);
   }
 }
 
@@ -419,7 +444,8 @@ function loadLocalState(){
     const savedPct = JSON.parse(localStorage.getItem(LS_PCT) || '{}');
     pctMatrix = {};
     for (const g of guarniciones) {
-      pctMatrix[g] = (savedPct[g] !== undefined) ? savedPct[g] : (DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0);
+      const rawPct = (savedPct[g] !== undefined) ? savedPct[g] : (DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0);
+      pctMatrix[g] = normalizePct(rawPct);
     }
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
   } catch(e) {
@@ -431,8 +457,13 @@ function ensurePctCoverage(){
   for (const g of guarniciones) {
     if (pctMatrix[g] === undefined) {
       pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
-    }
+    } else pctMatrix[g] = normalizePct(pctMatrix[g]);
   }
+}
+function normalizePct(value){
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, Math.round(numeric / 5) * 5));
 }
 function savePct(){ localStorage.setItem(LS_PCT, JSON.stringify(pctMatrix)); }
 function saveMap(){ localStorage.setItem(LS_MAP, JSON.stringify(gradoMap)); }
@@ -440,7 +471,8 @@ function saveMap(){ localStorage.setItem(LS_MAP, JSON.stringify(gradoMap)); }
 /* ==================== COMPUTE (sin tocar el DOM) ==================== */
 function haberFor(gradoRaw){
   const norm = normalize(gradoRaw);
-  const mapped = gradoMap[norm] || norm;
+  const savedMapping = gradoMap[norm];
+  const mapped = (savedMapping ? gradoCode(savedMapping) || savedMapping : null) || gradoCode(gradoRaw);
   const info = haberesMap[mapped];
   if (!info) return { value: null, matched: false };
   const value = info.valuesByHeader[selectedMonth];
@@ -519,7 +551,7 @@ function renderPctTable(){
     html += `<tr data-g="${escapeAttr(g)}">
       <td>${g}</td>
       <td class="num pct-row-count">${(counts[g]||0).toLocaleString('es-AR')}</td>
-      <td class="num"><input class="pct-input" type="number" step="1" min="0" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
+      <td class="num"><input class="pct-input" type="number" step="5" min="0" max="100" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
       <td class="num pct-row-total">${money(totals[g] || 0)}</td>
     </tr>`;
   }
@@ -528,10 +560,14 @@ function renderPctTable(){
   document.getElementById('pctTable').innerHTML = html;
 
   document.querySelectorAll('.pct-input').forEach(inp => {
-    inp.addEventListener('input', () => {
+    const applyPct = (normalizeToStep) => {
       const g = inp.dataset.g;
-      const v = parseFloat(inp.value.replace(',', '.'));
-      pctMatrix[g] = isNaN(v) ? 0 : v;
+      let v = parseFloat(inp.value.replace(',', '.'));
+      if (isNaN(v)) v = 0;
+      v = Math.max(0, Math.min(100, v));
+      if (normalizeToStep) v = Math.round(v / 5) * 5;
+      pctMatrix[g] = v;
+      if (normalizeToStep) inp.value = v;
       savePct();
       computeAll();
       // actualiza todo excepto la propia tabla de % (para no perder el foco del input)
@@ -542,7 +578,9 @@ function renderPctTable(){
       renderFilters();
       renderDetailTable();
       updatePctTableTotalsInPlace();
-    });
+    };
+    inp.addEventListener('input', () => applyPct(false));
+    inp.addEventListener('change', () => applyPct(true));
   });
 }
 function updatePctTableTotalsInPlace(){
