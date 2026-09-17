@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
     --navy:#182241; --navy-2:#233258; --gold:#c8a84b; --gold-2:#a8872f;
@@ -204,6 +204,30 @@ const TIPOS = TABS.map(t => t.tipo);
 const LS_PCT = 'ezz_pct_matrix_v1';
 const LS_MAP = 'ezz_grado_map_v1';
 
+// % de zona de referencia sobre el haber básico, por guarnición (mismo valor para
+// los tres tipos de personal al arrancar — queda editable por celda para simular).
+const DEFAULT_PCT_RAW = [
+  ["Apóstoles",70],["Arana",10],["Azul",15],["Bahía Blanca",20],["Bernardo de Irigoyen",80],
+  ["CABA",0],["Campo de Mayo - El Palomar",10],["Campo Los Andes",60],["Catamarca",30],
+  ["Chajarí",30],["City Bell",10],["Colonia Sarmiento",90],["Comandante Piedrabuena",90],
+  ["Comodoro Rivadavia",70],["Concepción del Uruguay",15],["Concordia",15],["Córdoba",20],
+  ["Coronel Pringles",10],["Corrientes",15],["Covunco",80],["Crespo",10],["Curuzú Cuatiá",15],
+  ["Esquel",70],["Formosa",50],["Goya",30],["Grl Galarza",10],["Grl Ordoñez",20],["Grl Pico",15],
+  ["Guadalupe",10],["Gualeguaychú",15],["Jujuy",15],["Junín",10],["Junín de los Andes",80],
+  ["La Plata",10],["La Rioja",30],["Las Lajas",90],["Magdalena",30],["Mar del Plata",10],
+  ["Mendoza",20],["Mercedes (Corrientes)",30],["Monte Caseros",30],["Neuquén",30],["Olavarría",10],
+  ["Paraná",15],["Paso de los Libres",30],["Pigüé",10],["Posadas",30],["Primeros Pinos",90],
+  ["Puente del Inca",100],["Puerto Deseado",80],["Puerto Iguazú",50],["Puerto Santa Cruz",90],
+  ["Resistencia",15],["Río Cuarto",20],["Río Gallegos",80],["Río Grande",90],["Rio Mayo",100],
+  ["Rosario",10],["Rosario del Tala",30],["Rospentek",100],["Salta",15],
+  ["San Antonio de los Cobres",100],["San Carlos de Bariloche",60],["San Javier",70],["San Juan",15],
+  ["San Lorenzo",15],["San Luis",15],["San Martín de los Andes",70],["San Nicolás",10],
+  ["San Rafael",15],["Santa Fe",10],["Santa Rosa",15],["Santiago del Estero",15],
+  ["Santo Tomé (Corrientes)",50],["Santo Tomé (Santa Fe)",10],["Tandil",15],["Tartagal",60],
+  ["Toay",15],["Tucumán",15],["Tupungato",60],["Ushuaia",90],["Uspallata",80],["Villaguay",30],
+  ["Yapeyú",50],["Zapala",70]
+];
+
 /* ==================== STATE ==================== */
 let personas = [];          // registros crudos de las 3 pestañas
 let haberesMap = {};        // normGrado -> { label, valuesByHeader }
@@ -221,6 +245,9 @@ function normalize(s){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/\s+/g,' ');
 }
+const DEFAULT_PCT = {};
+DEFAULT_PCT_RAW.forEach(([label, pct]) => { DEFAULT_PCT[normalize(label)] = pct; });
+
 function parseARNumber(s){
   if (s === undefined || s === null || s === '') return null;
   let t = s.toString().trim();
@@ -343,12 +370,21 @@ function loadLocalState(){
     pctMatrix = {};
     for (const g of guarniciones) {
       pctMatrix[g] = {};
-      for (const t of TIPOS) pctMatrix[g][t] = (savedPct[g] && savedPct[g][t]) || 0;
+      if (savedPct[g]) {
+        for (const t of TIPOS) pctMatrix[g][t] = (savedPct[g][t] !== undefined) ? savedPct[g][t] : 0;
+      } else {
+        const def = DEFAULT_PCT[normalize(g)];
+        for (const t of TIPOS) pctMatrix[g][t] = (def !== undefined) ? def : 0;
+      }
     }
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
   } catch(e) {
     pctMatrix = {}; gradoMap = {};
-    for (const g of guarniciones) { pctMatrix[g] = {}; for (const t of TIPOS) pctMatrix[g][t] = 0; }
+    for (const g of guarniciones) {
+      const def = DEFAULT_PCT[normalize(g)];
+      pctMatrix[g] = {};
+      for (const t of TIPOS) pctMatrix[g][t] = (def !== undefined) ? def : 0;
+    }
   }
 }
 function savePct(){ localStorage.setItem(LS_PCT, JSON.stringify(pctMatrix)); }
@@ -425,7 +461,8 @@ function renderPctTable(){
 
   let html = '<thead><tr><th>Guarnición</th>' + TIPOS.map(t => `<th class="num">${t}</th>`).join('') + '<th class="num">Total guarnición</th></tr></thead><tbody>';
   for (const g of guarniciones) {
-    html += `<tr><td>${g}</td>`;
+    const hasDefault = DEFAULT_PCT[normalize(g)] !== undefined;
+    html += `<tr><td>${g}${hasDefault ? '' : ' <span class="flag" title="No estaba en la lista de % que me pasaste — revisá la carga">⚠ sin referencia</span>'}</td>`;
     for (const t of TIPOS) {
       const val = pctMatrix[g][t];
       html += `<td class="num"><input class="pct-input" type="number" step="0.1" min="0" data-g="${escapeAttr(g)}" data-t="${escapeAttr(t)}" value="${val}"><span class="pct-suffix">%</span></td>`;
