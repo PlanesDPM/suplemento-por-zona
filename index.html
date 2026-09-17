@@ -126,7 +126,7 @@
   <section class="two-col" id="mainGrid" style="display:none;">
     <div>
       <div class="section-head">
-        <h2>Matriz de % por guarnición y tipo de personal</h2>
+        <h2>Matriz de % por guarnición</h2>
         <span class="note">Editable — se guarda en este navegador</span>
       </div>
       <div class="panel">
@@ -168,6 +168,17 @@
     </details>
   </section>
 
+  <section id="verifyDestinosSection" style="display:none;">
+    <details class="verify" id="verifyDestinosDetails">
+      <summary>Soldados Voluntarios con destino sin guarnición derivada <span id="verifyDestinosCount"></span></summary>
+      <p class="note" style="color:var(--ink-soft);font-size:.85rem;margin:10px 0 4px;">
+        La guarnición de los Soldados Voluntarios se toma cruzando su Destino Actual contra el Destino Actual de la pestaña Suboficiales.
+        Estos destinos no encontraron coincidencia — asigná la guarnición manualmente.
+      </p>
+      <div id="verifyDestinosRows"></div>
+    </details>
+  </section>
+
   <section id="detailSection" style="display:none;">
     <div class="section-head">
       <h2>Detalle de personal</h2>
@@ -201,8 +212,9 @@ const TABS = [
   { name: 'Soldados voluntarios',  tipo: 'Soldado Voluntario' }
 ];
 const TIPOS = TABS.map(t => t.tipo);
-const LS_PCT = 'ezz_pct_matrix_v1';
+const LS_PCT = 'ezz_pct_matrix_v2';
 const LS_MAP = 'ezz_grado_map_v1';
+const LS_DESTINO_MAP = 'ezz_destino_map_v1';
 
 // % de zona de referencia sobre el haber básico, por guarnición (mismo valor para
 // los tres tipos de personal al arrancar — queda editable por celda para simular).
@@ -234,9 +246,12 @@ let haberesMap = {};        // normGrado -> { label, valuesByHeader }
 let monthHeaders = [];      // columnas de mes detectadas en la planilla de haberes
 let selectedMonth = null;
 let guarniciones = [];      // lista única de guarniciones detectadas
-let pctMatrix = {};         // guarnicion -> { tipo: pct }
+let pctMatrix = {};         // guarnicion -> pct (un solo % por guarnición, para todos los tipos)
 let gradoMap = {};          // normGrado(personal) -> normGrado(haberes) manual override
-let unmatchedGrados = [];   // [{normG, label, count}]
+let destinoMap = {};        // normDestino(soldado) -> guarnicion, manual override cuando no matchea con Suboficiales
+let destinoToGuarnicion = {}; // normDestino -> guarnicion, construido desde la pestaña Suboficiales
+let unmatchedGrados = [];   // [{norm, label, count}]
+let unmatchedDestinos = []; // [{norm, label, count}] — destinos de Soldados Voluntarios sin guarnición derivada
 let chart = null;
 
 /* ==================== UTIL ==================== */
@@ -244,6 +259,14 @@ function normalize(s){
   return (s || '').toString().trim().toUpperCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/\s+/g,' ');
+}
+// "Buenos Aires (Palermo, Edif.)" / "Buenos Aires" / variantes → CABA
+function normalizeGuarnicion(raw){
+  const v = (raw || '').toString().trim();
+  if (!v) return '';
+  const n = normalize(v);
+  if (n.startsWith('BUENOS AIRES')) return 'CABA';
+  return v;
 }
 const DEFAULT_PCT = {};
 DEFAULT_PCT_RAW.forEach(([label, pct]) => { DEFAULT_PCT[normalize(label)] = pct; });
@@ -303,24 +326,50 @@ async function loadAll(){
   document.getElementById('mainGrid').style.display = 'none';
   document.getElementById('gradoSection').style.display = 'none';
   document.getElementById('verifySection').style.display = 'none';
+  document.getElementById('verifyDestinosSection').style.display = 'none';
   document.getElementById('detailSection').style.display = 'none';
 
   try {
     // -- personal --
     personas = [];
+    destinoToGuarnicion = {};
     for (const tab of TABS) {
       const rows = await fetchCSV(gvizUrl(SHEET_PERSONAL_ID, tab.name));
       for (const r of rows) {
         const nombre = (r['Apellido y Nombres'] || '').trim();
         const dni = (r['DNI'] || '').trim();
         if (!nombre && !dni) continue;
+        const destino = (r['Destino Actual'] || '').trim();
+        const rawGuarnicion = (r['Guarnición'] || '').trim();
+
+        let guarnicion, guarnicionMatched;
+        if (tab.tipo === 'Suboficial') {
+          guarnicion = normalizeGuarnicion(rawGuarnicion) || '(sin dato)';
+          guarnicionMatched = true;
+          if (destino) destinoToGuarnicion[normalize(destino)] = guarnicion;
+        } else if (tab.tipo === 'Soldado Voluntario') {
+          const key = normalize(destino);
+          if (destino && destinoToGuarnicion[key]) {
+            guarnicion = destinoToGuarnicion[key];
+            guarnicionMatched = true;
+          } else {
+            // sin match automático — se resuelve luego con destinoMap manual o queda pendiente
+            guarnicion = normalizeGuarnicion(rawGuarnicion) || '(sin dato)';
+            guarnicionMatched = false;
+          }
+        } else {
+          guarnicion = normalizeGuarnicion(rawGuarnicion) || '(sin dato)';
+          guarnicionMatched = true;
+        }
+
         personas.push({
           tipo: tab.tipo,
           grado: (r['Grado'] || '').trim(),
           arma: (r['Arma/Serv'] || '').trim(),
-          guarnicion: (r['Guarnición'] || '').trim() || '(sin dato)',
-          nombre, dni,
-          destino: (r['Destino Actual'] || '').trim()
+          guarnicion, destino,
+          _autoGuarnicion: guarnicion,
+          _autoMatched: guarnicionMatched,
+          nombre, dni
         });
       }
     }
@@ -350,7 +399,7 @@ async function loadAll(){
     sel.value = defaultHeader;
     selectedMonth = defaultHeader;
 
-    // guarniciones list
+    // guarniciones list (provisorio; se re-sincroniza en cada recálculo si el destinoMap agrega nuevas)
     guarniciones = [...new Set(personas.map(p => p.guarnicion))].sort((a,b)=>a.localeCompare(b,'es'));
 
     // load saved state
@@ -369,26 +418,36 @@ function loadLocalState(){
     const savedPct = JSON.parse(localStorage.getItem(LS_PCT) || '{}');
     pctMatrix = {};
     for (const g of guarniciones) {
-      pctMatrix[g] = {};
-      if (savedPct[g]) {
-        for (const t of TIPOS) pctMatrix[g][t] = (savedPct[g][t] !== undefined) ? savedPct[g][t] : 0;
+      if (savedPct[g] !== undefined) {
+        pctMatrix[g] = savedPct[g];
       } else {
         const def = DEFAULT_PCT[normalize(g)];
-        for (const t of TIPOS) pctMatrix[g][t] = (def !== undefined) ? def : 0;
+        pctMatrix[g] = (def !== undefined) ? def : 0;
       }
     }
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
+    destinoMap = JSON.parse(localStorage.getItem(LS_DESTINO_MAP) || '{}');
   } catch(e) {
-    pctMatrix = {}; gradoMap = {};
+    pctMatrix = {}; gradoMap = {}; destinoMap = {};
     for (const g of guarniciones) {
       const def = DEFAULT_PCT[normalize(g)];
-      pctMatrix[g] = {};
-      for (const t of TIPOS) pctMatrix[g][t] = (def !== undefined) ? def : 0;
+      pctMatrix[g] = (def !== undefined) ? def : 0;
+    }
+  }
+}
+// asegura que toda guarnición nueva (ej: surgida de un mapeo manual de destino) tenga entrada en pctMatrix,
+// sin tocar las que ya existen
+function ensurePctCoverage(){
+  for (const g of guarniciones) {
+    if (pctMatrix[g] === undefined) {
+      const def = DEFAULT_PCT[normalize(g)];
+      pctMatrix[g] = (def !== undefined) ? def : 0;
     }
   }
 }
 function savePct(){ localStorage.setItem(LS_PCT, JSON.stringify(pctMatrix)); }
 function saveMap(){ localStorage.setItem(LS_MAP, JSON.stringify(gradoMap)); }
+function saveDestinoMap(){ localStorage.setItem(LS_DESTINO_MAP, JSON.stringify(destinoMap)); }
 
 /* ==================== COMPUTE ==================== */
 function haberFor(gradoRaw){
@@ -401,14 +460,45 @@ function haberFor(gradoRaw){
 }
 
 function recomputeAndRender(){
+  // 1) resolver guarnición final de cada persona (auto + override manual de destino)
+  for (const p of personas) {
+    if (p.tipo === 'Soldado Voluntario') {
+      const key = normalize(p.destino);
+      if (destinoMap[key]) {
+        p.guarnicion = destinoMap[key];
+        p.guarnicionMatched = true;
+      } else {
+        p.guarnicion = p._autoGuarnicion;
+        p.guarnicionMatched = p._autoMatched;
+      }
+    }
+  }
+
+  // 2) resincronizar lista de guarniciones y cobertura de la matriz de %
+  guarniciones = [...new Set(personas.map(p => p.guarnicion))].sort((a,b)=>a.localeCompare(b,'es'));
+  ensurePctCoverage();
+
+  // 3) destinos de soldados sin guarnición derivada automáticamente
+  const unmatchedDestSeen = {};
+  for (const p of personas) {
+    if (p.tipo === 'Soldado Voluntario' && !p.guarnicionMatched) {
+      const key = normalize(p.destino) || '(sin destino)';
+      unmatchedDestSeen[key] = (unmatchedDestSeen[key] || 0) + 1;
+    }
+  }
+  unmatchedDestinos = Object.keys(unmatchedDestSeen).map(k => {
+    const sample = personas.find(p => p.tipo === 'Soldado Voluntario' && (normalize(p.destino) || '(sin destino)') === k);
+    return { norm: k, label: sample ? (sample.destino || '(sin destino)') : k, count: unmatchedDestSeen[k] };
+  }).sort((a,b) => b.count - a.count);
+
+  // 4) haber básico y suplemento por persona
   unmatchedGrados = [];
   const unmatchedSeen = {};
-
   for (const p of personas) {
     const h = haberFor(p.grado);
     p.haber = h.value;
     p.matched = h.matched;
-    const pct = (pctMatrix[p.guarnicion] && pctMatrix[p.guarnicion][p.tipo]) || 0;
+    const pct = pctMatrix[p.guarnicion] || 0;
     p.pct = pct;
     p.suplemento = (h.value || 0) * pct / 100;
 
@@ -427,6 +517,7 @@ function recomputeAndRender(){
   renderGuarnicionChartAndTable();
   renderGradoTable();
   renderVerify();
+  renderVerifyDestinos();
   renderFilters();
   renderDetailTable();
 
@@ -457,31 +548,34 @@ function renderKPIs(){
 /* ==================== RENDER: % matrix ==================== */
 function renderPctTable(){
   const totalsByGuarnicion = {};
-  for (const p of personas) totalsByGuarnicion[p.guarnicion] = (totalsByGuarnicion[p.guarnicion] || 0) + p.suplemento;
+  const countByGuarnicion = {};
+  for (const p of personas) {
+    totalsByGuarnicion[p.guarnicion] = (totalsByGuarnicion[p.guarnicion] || 0) + p.suplemento;
+    countByGuarnicion[p.guarnicion] = (countByGuarnicion[p.guarnicion] || 0) + 1;
+  }
 
-  let html = '<thead><tr><th>Guarnición</th>' + TIPOS.map(t => `<th class="num">${t}</th>`).join('') + '<th class="num">Total guarnición</th></tr></thead><tbody>';
+  let html = '<thead><tr><th>Guarnición</th><th class="num">Personal</th><th class="num">%</th><th class="num">Total guarnición</th></tr></thead><tbody>';
   for (const g of guarniciones) {
     const hasDefault = DEFAULT_PCT[normalize(g)] !== undefined;
-    html += `<tr><td>${g}${hasDefault ? '' : ' <span class="flag" title="No estaba en la lista de % que me pasaste — revisá la carga">⚠ sin referencia</span>'}</td>`;
-    for (const t of TIPOS) {
-      const val = pctMatrix[g][t];
-      html += `<td class="num"><input class="pct-input" type="number" step="0.1" min="0" data-g="${escapeAttr(g)}" data-t="${escapeAttr(t)}" value="${val}"><span class="pct-suffix">%</span></td>`;
-    }
-    html += `<td class="num">${money(totalsByGuarnicion[g] || 0)}</td></tr>`;
+    const val = pctMatrix[g] || 0;
+    html += `<tr><td>${g}${hasDefault ? '' : ' <span class="flag" title="No estaba en la lista de % que me pasaste — revisá la carga">⚠ sin referencia</span>'}</td>
+      <td class="num">${countByGuarnicion[g] || 0}</td>
+      <td class="num"><input class="pct-input" type="number" step="0.1" min="0" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
+      <td class="num">${money(totalsByGuarnicion[g] || 0)}</td></tr>`;
   }
   const grandTotal = personas.reduce((s,p)=>s+p.suplemento,0);
-  html += `</tbody><tfoot><tr><td>Total</td>${TIPOS.map(()=>'<td class="num"></td>').join('')}<td class="num">${money(grandTotal)}</td></tr></tfoot>`;
+  html += `</tbody><tfoot><tr><td>Total</td><td class="num">${personas.length}</td><td class="num"></td><td class="num">${money(grandTotal)}</td></tr></tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
   document.querySelectorAll('.pct-input').forEach(inp => {
     inp.addEventListener('input', () => {
-      const g = inp.dataset.g, t = inp.dataset.t;
+      const g = inp.dataset.g;
       const v = parseFloat(inp.value.replace(',', '.')) || 0;
-      pctMatrix[g][t] = v;
+      pctMatrix[g] = v;
       savePct();
       recomputeAndRender();
       // keep focus after full re-render
-      const again = document.querySelector(`.pct-input[data-g="${escapeAttr(g)}"][data-t="${escapeAttr(t)}"]`);
+      const again = document.querySelector(`.pct-input[data-g="${escapeAttr(g)}"]`);
       if (again) { again.focus(); const pos = again.value.length; again.setSelectionRange(pos,pos); }
     });
   });
@@ -583,6 +677,47 @@ function renderVerify(){
   });
 }
 
+/* ==================== RENDER: verification panel — destinos de Soldados Voluntarios ==================== */
+function renderVerifyDestinos(){
+  const section = document.getElementById('verifyDestinosSection');
+  const countEl = document.getElementById('verifyDestinosCount');
+  const rowsEl = document.getElementById('verifyDestinosRows');
+  const details = document.getElementById('verifyDestinosDetails');
+
+  if (unmatchedDestinos.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  countEl.innerHTML = `<span class="flag">(${unmatchedDestinos.length} destino${unmatchedDestinos.length>1?'s':''} sin guarnición, ${unmatchedDestinos.reduce((s,u)=>s+u.count,0)} soldados afectados)</span>`;
+  details.open = true;
+
+  const guarnicionOptions = guarniciones.map(g => `<option value="${escapeAttr(g)}">${g}</option>`).join('');
+
+  let html = '';
+  for (const u of unmatchedDestinos) {
+    html += `<div class="map-row">
+      <strong>${u.label}</strong>
+      <span class="note" style="color:var(--ink-soft);">(${u.count} persona${u.count>1?'s':''})</span>
+      <select data-normd="${escapeAttr(u.norm)}">
+        <option value="">— asignar guarnición —</option>
+        ${guarnicionOptions}
+      </select>
+    </div>`;
+  }
+  rowsEl.innerHTML = html;
+  rowsEl.querySelectorAll('select').forEach(sel => {
+    const normD = sel.dataset.normd;
+    if (destinoMap[normD]) sel.value = destinoMap[normD];
+    sel.addEventListener('change', () => {
+      if (sel.value) destinoMap[normD] = sel.value;
+      else delete destinoMap[normD];
+      saveDestinoMap();
+      recomputeAndRender();
+    });
+  });
+}
+
 /* ==================== RENDER: filters + detail table ==================== */
 function renderFilters(){
   const fTipo = document.getElementById('filterTipo');
@@ -662,7 +797,7 @@ document.getElementById('monthSelect').addEventListener('change', (e) => {
 });
 document.getElementById('resetPctBtn').addEventListener('click', () => {
   if (!confirm('¿Restablecer todos los % a cero?')) return;
-  for (const g of guarniciones) for (const t of TIPOS) pctMatrix[g][t] = 0;
+  for (const g of guarniciones) pctMatrix[g] = 0;
   savePct();
   recomputeAndRender();
 });
