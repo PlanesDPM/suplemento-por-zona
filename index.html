@@ -98,7 +98,7 @@
   <div class="top-inner">
     <div>
       <h1>Estudio de % de Zonas</h1>
-      <div class="subtitle">Gasto en suplemento de guarnición — personal Oficiales, Suboficiales y Soldados Voluntarios</div>
+      <div class="subtitle">Gasto en suplemento de guarnición — Oficiales, Suboficiales y Soldados Voluntarios</div>
     </div>
     <div class="controls">
       <div>
@@ -168,17 +168,6 @@
     </details>
   </section>
 
-  <section id="verifyDestinosSection" style="display:none;">
-    <details class="verify" id="verifyDestinosDetails">
-      <summary>Soldados Voluntarios con destino sin guarnición derivada <span id="verifyDestinosCount"></span></summary>
-      <p class="note" style="color:var(--ink-soft);font-size:.85rem;margin:10px 0 4px;">
-        La guarnición de los Soldados Voluntarios se toma cruzando su Destino Actual contra el Destino Actual de la pestaña Suboficiales.
-        Estos destinos no encontraron coincidencia — asigná la guarnición manualmente.
-      </p>
-      <div id="verifyDestinosRows"></div>
-    </details>
-  </section>
-
   <section id="detailSection" style="display:none;">
     <div class="section-head">
       <h2>Detalle de personal</h2>
@@ -197,8 +186,9 @@
 </main>
 
 <footer>
-  Personal leído en vivo desde la planilla de guarniciones · Haberes básicos leídos en vivo desde la planilla de aumentos, columna del mes seleccionado.
-  Los datos no se escriben ni modifican en ninguna de las dos planillas: esta herramienta solo lee.
+  Oficiales y Suboficiales se leen en vivo desde la planilla de guarniciones (columna R de cada pestaña) · Haberes básicos leídos en vivo desde la planilla de aumentos, columna del mes seleccionado.
+  Los Soldados Voluntarios (todos grado VP) se toman de la cantidad fija por guarnición cargada en la herramienta.
+  Ninguna planilla de origen se escribe ni modifica: esta herramienta solo lee.
 </footer>
 
 <script>
@@ -207,17 +197,15 @@ const SHEET_PERSONAL_ID = '1iIVBTWeOpdtp2Np13KbkgHXsxgHNTpt2iuz8r_3XVQY';
 const SHEET_HABERES_ID  = '1nKymrJqwL9mhRl8y-X54RKsAaxbpRY3N1Yj5lXeAeYo';
 const HABERES_TAB = 'Aumentos';
 const TABS = [
-  { name: 'Oficiales',             tipo: 'Oficial' },
-  { name: 'Suboficiales',          tipo: 'Suboficial' },
-  { name: 'Soldados voluntarios',  tipo: 'Soldado Voluntario' }
+  { name: 'Oficiales',    tipo: 'Oficial' },
+  { name: 'Suboficiales', tipo: 'Suboficial' }
 ];
-const TIPOS = TABS.map(t => t.tipo);
+const TIPOS = ['Oficial', 'Suboficial', 'Soldado Voluntario'];
+const GRADO_SOLDADO = 'Voluntario de Primera (VP)';
 const LS_PCT = 'ezz_pct_matrix_v2';
 const LS_MAP = 'ezz_grado_map_v1';
-const LS_DESTINO_MAP = 'ezz_destino_map_v1';
 
-// % de zona de referencia sobre el haber básico, por guarnición (mismo valor para
-// los tres tipos de personal al arrancar — queda editable por celda para simular).
+// % de zona de referencia sobre el haber básico, por guarnición.
 const DEFAULT_PCT_RAW = [
   ["Apóstoles",70],["Arana",10],["Azul",15],["Bahía Blanca",20],["Bernardo de Irigoyen",80],
   ["CABA",0],["Campo de Mayo - El Palomar",10],["Campo Los Andes",60],["Catamarca",30],
@@ -240,18 +228,38 @@ const DEFAULT_PCT_RAW = [
   ["Yapeyú",50],["Zapala",70]
 ];
 
+// Cantidad fija de Soldados Voluntarios por guarnición (todos grado VP).
+const SOLDADOS_VP_RAW = [
+  ["Apóstoles",293],["Arana",191],["Azul",118],["Bahía Blanca",181],["Bernardo de Irigoyen",56],
+  ["CABA",3198],["Campo de Mayo - El Palomar",2422],["Campo Los Andes",313],["Catamarca",4],
+  ["Chajarí",89],["City Bell",138],["Colonia Sarmiento",240],["Comandante Piedrabuena",211],
+  ["Comodoro Rivadavia",409],["Concepción del Uruguay",94],["Concordia",91],["Córdoba",996],
+  ["Coronel Pringles",15],["Corrientes",4],["Covunco",168],["Crespo",4],["Curuzú Cuatiá",212],
+  ["Esquel",95],["Formosa",215],["Goya",168],["Grl Galarza",17],["Grl Ordoñez",6],["Grl Pico",65],
+  ["Guadalupe",10],["Gualeguaychú",51],["Jujuy",541],["Junín",158],["Junín de los Andes",244],
+  ["La Plata",2],["La Rioja",409],["Las Lajas",200],["Magdalena",77],["Mar del Plata",98],
+  ["Mendoza",352],["Mercedes (Corrientes)",221],["Monte Caseros",321],["Neuquén",201],["Olavarría",106],
+  ["Paraná",259],["Paso de los Libres",130],["Pigüé",177],["Posadas",285],["Primeros Pinos",60],
+  ["Puente del Inca",65],["Puerto Deseado",71],["Puerto Iguazú",169],["Puerto Santa Cruz",115],
+  ["Resistencia",327],["Río Cuarto",135],["Río Gallegos",432],["Río Grande",0],["Rio Mayo",110],
+  ["Rosario",3],["Rosario del Tala",107],["Rospentek",242],["Salta",674],
+  ["San Antonio de los Cobres",0],["San Carlos de Bariloche",142],["San Javier",258],["San Juan",174],
+  ["San Lorenzo",110],["San Luis",150],["San Martín de los Andes",110],["San Nicolás",37],
+  ["San Rafael",42],["Santa Fe",98],["Santa Rosa",189],["Santiago del Estero",44],
+  ["Santo Tomé (Corrientes)",60],["Santo Tomé (Santa Fe)",277],["Tandil",161],["Tartagal",313],
+  ["Toay",256],["Tucumán",80],["Tupungato",196],["Ushuaia",0],["Uspallata",261],["Villaguay",260],
+  ["Yapeyú",15],["Zapala",189]
+];
+
 /* ==================== STATE ==================== */
-let personas = [];          // registros crudos de las 3 pestañas
+let personas = [];          // filas de Oficiales/Suboficiales + filas agregadas de Soldados VP
 let haberesMap = {};        // normGrado -> { label, valuesByHeader }
-let monthHeaders = [];      // columnas de mes detectadas en la planilla de haberes
+let monthHeaders = [];      // columnas de mes disponibles en la planilla de haberes
 let selectedMonth = null;
-let guarniciones = [];      // lista única de guarniciones detectadas
-let pctMatrix = {};         // guarnicion -> pct (un solo % por guarnición, para todos los tipos)
-let gradoMap = {};          // normGrado(personal) -> normGrado(haberes) manual override
-let destinoMap = {};        // normDestino(soldado) -> guarnicion, manual override cuando no matchea con Suboficiales
-let destinoToGuarnicion = {}; // normDestino -> guarnicion, construido desde la pestaña Suboficiales
+let guarniciones = [];      // lista única de guarniciones (siempre subconjunto de las 85 + CABA)
+let pctMatrix = {};         // guarnicion -> % (un solo valor, aplicado a todos los tipos)
+let gradoMap = {};          // normGrado(personal) -> normGrado(haberes), override manual
 let unmatchedGrados = [];   // [{norm, label, count}]
-let unmatchedDestinos = []; // [{norm, label, count}] — destinos de Soldados Voluntarios sin guarnición derivada
 let chart = null;
 
 /* ==================== UTIL ==================== */
@@ -260,16 +268,21 @@ function normalize(s){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/\s+/g,' ');
 }
-// "Buenos Aires (Palermo, Edif.)" / "Buenos Aires" / variantes → CABA
-function normalizeGuarnicion(raw){
-  const v = (raw || '').toString().trim();
-  if (!v) return '';
-  const n = normalize(v);
-  if (n.startsWith('BUENOS AIRES')) return 'CABA';
-  return v;
-}
 const DEFAULT_PCT = {};
-DEFAULT_PCT_RAW.forEach(([label, pct]) => { DEFAULT_PCT[normalize(label)] = pct; });
+const CANON_GUARNICION = {};
+DEFAULT_PCT_RAW.forEach(([label, pct]) => {
+  DEFAULT_PCT[normalize(label)] = pct;
+  CANON_GUARNICION[normalize(label)] = label;
+});
+// Cualquier guarnición que no esté en la lista de 85 (o que sea "Buenos Aires..." en cualquier variante,
+// esté vacía, diga "a asignar" u otra cosa) se resuelve como CABA.
+function resolveGuarnicion(raw){
+  const v = (raw || '').toString().trim();
+  if (!v) return 'CABA';
+  const n = normalize(v);
+  if (CANON_GUARNICION[n]) return CANON_GUARNICION[n];
+  return 'CABA';
+}
 
 function parseARNumber(s){
   if (s === undefined || s === null || s === '') return null;
@@ -295,6 +308,7 @@ function setStatus(msg, isError){
 function clearStatus(){
   document.getElementById('status').className = '';
 }
+function escapeAttr(s){ return (s || '').toString().replace(/"/g,'&quot;'); }
 function gvizUrl(sheetId, tabName){
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 }
@@ -307,7 +321,7 @@ async function fetchCSV(url){
   });
 }
 
-/* month detection */
+/* detección de mes (solo para elegir el default; la lista de opciones incluye todas las columnas) */
 const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const ABBR = { ene:'enero', feb:'febrero', mar:'marzo', abr:'abril', may:'mayo', jun:'junio',
                jul:'julio', ago:'agosto', sep:'septiembre', set:'septiembre', oct:'octubre',
@@ -318,6 +332,7 @@ function monthKeyFromHeader(h){
   for (const [abbr, full] of Object.entries(ABBR)) if (n.startsWith(abbr)) return full;
   return null;
 }
+const EXCLUDE_HEADERS = ['Nro','Grados','Prom Aum Mensual'];
 
 /* ==================== LOAD ==================== */
 async function loadAll(){
@@ -326,60 +341,47 @@ async function loadAll(){
   document.getElementById('mainGrid').style.display = 'none';
   document.getElementById('gradoSection').style.display = 'none';
   document.getElementById('verifySection').style.display = 'none';
-  document.getElementById('verifyDestinosSection').style.display = 'none';
   document.getElementById('detailSection').style.display = 'none';
 
   try {
-    // -- personal --
+    // -- Oficiales + Suboficiales --
     personas = [];
-    destinoToGuarnicion = {};
     for (const tab of TABS) {
       const rows = await fetchCSV(gvizUrl(SHEET_PERSONAL_ID, tab.name));
       for (const r of rows) {
         const nombre = (r['Apellido y Nombres'] || '').trim();
         const dni = (r['DNI'] || '').trim();
         if (!nombre && !dni) continue;
-        const destino = (r['Destino Actual'] || '').trim();
-        const rawGuarnicion = (r['Guarnición'] || '').trim();
-
-        let guarnicion, guarnicionMatched;
-        if (tab.tipo === 'Suboficial') {
-          guarnicion = normalizeGuarnicion(rawGuarnicion) || '(sin dato)';
-          guarnicionMatched = true;
-          if (destino) destinoToGuarnicion[normalize(destino)] = guarnicion;
-        } else if (tab.tipo === 'Soldado Voluntario') {
-          const key = normalize(destino);
-          if (destino && destinoToGuarnicion[key]) {
-            guarnicion = destinoToGuarnicion[key];
-            guarnicionMatched = true;
-          } else {
-            // sin match automático — se resuelve luego con destinoMap manual o queda pendiente
-            guarnicion = normalizeGuarnicion(rawGuarnicion) || '(sin dato)';
-            guarnicionMatched = false;
-          }
-        } else {
-          guarnicion = normalizeGuarnicion(rawGuarnicion) || '(sin dato)';
-          guarnicionMatched = true;
-        }
-
         personas.push({
           tipo: tab.tipo,
           grado: (r['Grado'] || '').trim(),
           arma: (r['Arma/Serv'] || '').trim(),
-          guarnicion, destino,
-          _autoGuarnicion: guarnicion,
-          _autoMatched: guarnicionMatched,
-          nombre, dni
+          guarnicion: resolveGuarnicion(r['Guarnición']),
+          nombre, dni,
+          count: 1
         });
       }
     }
-    if (personas.length === 0) throw new Error('No se encontraron registros de personal en las tres pestañas.');
+    if (personas.length === 0) throw new Error('No se encontraron registros de personal en Oficiales/Suboficiales.');
+
+    // -- Soldados Voluntarios: cantidad fija por guarnición, todos VP --
+    for (const [gName, cant] of SOLDADOS_VP_RAW) {
+      personas.push({
+        tipo: 'Soldado Voluntario',
+        grado: GRADO_SOLDADO,
+        arma: '',
+        guarnicion: resolveGuarnicion(gName),
+        nombre: `(total Soldados VP — ${gName})`,
+        dni: '',
+        count: cant
+      });
+    }
 
     // -- haberes --
     const hRows = await fetchCSV(gvizUrl(SHEET_HABERES_ID, HABERES_TAB));
     if (hRows.length === 0) throw new Error('La pestaña "' + HABERES_TAB + '" no devolvió filas.');
     const headers = Object.keys(hRows[0]);
-    monthHeaders = headers.filter(h => monthKeyFromHeader(h));
+    monthHeaders = headers.filter(h => !EXCLUDE_HEADERS.includes(h.trim()) && h.trim() !== '');
     haberesMap = {};
     for (const r of hRows) {
       const gradoLabel = (r['Grados'] || '').trim();
@@ -390,23 +392,22 @@ async function loadAll(){
       haberesMap[norm] = { label: gradoLabel, valuesByHeader };
     }
 
-    // month select
+    // month select — se listan TODAS las columnas de mes encontradas
     const now = new Date();
     const currentMonthKey = MESES[now.getMonth()];
     let defaultHeader = monthHeaders.find(h => monthKeyFromHeader(h) === currentMonthKey) || monthHeaders[monthHeaders.length - 1];
     const sel = document.getElementById('monthSelect');
-    sel.innerHTML = monthHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+    sel.innerHTML = monthHeaders.map(h => `<option value="${escapeAttr(h)}">${h}</option>`).join('');
     sel.value = defaultHeader;
     selectedMonth = defaultHeader;
 
-    // guarniciones list (provisorio; se re-sincroniza en cada recálculo si el destinoMap agrega nuevas)
+    // load saved state (usa la lista de guarniciones ya resuelta)
     guarniciones = [...new Set(personas.map(p => p.guarnicion))].sort((a,b)=>a.localeCompare(b,'es'));
-
-    // load saved state
     loadLocalState();
 
     clearStatus();
-    recomputeAndRender();
+    computeAll();
+    renderAll();
   } catch (err) {
     console.error(err);
     setStatus('No se pudieron leer las planillas: ' + err.message + '. Verificá que ambas estén compartidas como "Cualquiera con el enlace: Lector" y que los nombres de pestaña coincidan exactamente.', true);
@@ -418,106 +419,65 @@ function loadLocalState(){
     const savedPct = JSON.parse(localStorage.getItem(LS_PCT) || '{}');
     pctMatrix = {};
     for (const g of guarniciones) {
-      if (savedPct[g] !== undefined) {
-        pctMatrix[g] = savedPct[g];
-      } else {
-        const def = DEFAULT_PCT[normalize(g)];
-        pctMatrix[g] = (def !== undefined) ? def : 0;
-      }
+      pctMatrix[g] = (savedPct[g] !== undefined) ? savedPct[g] : (DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0);
     }
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
-    destinoMap = JSON.parse(localStorage.getItem(LS_DESTINO_MAP) || '{}');
   } catch(e) {
-    pctMatrix = {}; gradoMap = {}; destinoMap = {};
-    for (const g of guarniciones) {
-      const def = DEFAULT_PCT[normalize(g)];
-      pctMatrix[g] = (def !== undefined) ? def : 0;
-    }
+    pctMatrix = {}; gradoMap = {};
+    for (const g of guarniciones) pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
   }
 }
-// asegura que toda guarnición nueva (ej: surgida de un mapeo manual de destino) tenga entrada en pctMatrix,
-// sin tocar las que ya existen
 function ensurePctCoverage(){
   for (const g of guarniciones) {
     if (pctMatrix[g] === undefined) {
-      const def = DEFAULT_PCT[normalize(g)];
-      pctMatrix[g] = (def !== undefined) ? def : 0;
+      pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
     }
   }
 }
 function savePct(){ localStorage.setItem(LS_PCT, JSON.stringify(pctMatrix)); }
 function saveMap(){ localStorage.setItem(LS_MAP, JSON.stringify(gradoMap)); }
-function saveDestinoMap(){ localStorage.setItem(LS_DESTINO_MAP, JSON.stringify(destinoMap)); }
 
-/* ==================== COMPUTE ==================== */
+/* ==================== COMPUTE (sin tocar el DOM) ==================== */
 function haberFor(gradoRaw){
   const norm = normalize(gradoRaw);
   const mapped = gradoMap[norm] || norm;
   const info = haberesMap[mapped];
-  if (!info) return { value: null, matched: false, label: gradoRaw };
+  if (!info) return { value: null, matched: false };
   const value = info.valuesByHeader[selectedMonth];
-  return { value: value === undefined ? null : value, matched: true, label: gradoRaw };
+  return { value: value === undefined ? null : value, matched: true };
 }
 
-function recomputeAndRender(){
-  // 1) resolver guarnición final de cada persona (auto + override manual de destino)
-  for (const p of personas) {
-    if (p.tipo === 'Soldado Voluntario') {
-      const key = normalize(p.destino);
-      if (destinoMap[key]) {
-        p.guarnicion = destinoMap[key];
-        p.guarnicionMatched = true;
-      } else {
-        p.guarnicion = p._autoGuarnicion;
-        p.guarnicionMatched = p._autoMatched;
-      }
-    }
-  }
-
-  // 2) resincronizar lista de guarniciones y cobertura de la matriz de %
-  guarniciones = [...new Set(personas.map(p => p.guarnicion))].sort((a,b)=>a.localeCompare(b,'es'));
+function computeAll(){
   ensurePctCoverage();
-
-  // 3) destinos de soldados sin guarnición derivada automáticamente
-  const unmatchedDestSeen = {};
-  for (const p of personas) {
-    if (p.tipo === 'Soldado Voluntario' && !p.guarnicionMatched) {
-      const key = normalize(p.destino) || '(sin destino)';
-      unmatchedDestSeen[key] = (unmatchedDestSeen[key] || 0) + 1;
-    }
-  }
-  unmatchedDestinos = Object.keys(unmatchedDestSeen).map(k => {
-    const sample = personas.find(p => p.tipo === 'Soldado Voluntario' && (normalize(p.destino) || '(sin destino)') === k);
-    return { norm: k, label: sample ? (sample.destino || '(sin destino)') : k, count: unmatchedDestSeen[k] };
-  }).sort((a,b) => b.count - a.count);
-
-  // 4) haber básico y suplemento por persona
   unmatchedGrados = [];
   const unmatchedSeen = {};
+
   for (const p of personas) {
     const h = haberFor(p.grado);
     p.haber = h.value;
     p.matched = h.matched;
     const pct = pctMatrix[p.guarnicion] || 0;
     p.pct = pct;
-    p.suplemento = (h.value || 0) * pct / 100;
+    const count = p.count || 1;
+    p.suplemento = (h.value || 0) * pct / 100 * count; // total de la fila (ya multiplicado por count)
 
     if (!h.matched) {
       const key = normalize(p.grado);
-      unmatchedSeen[key] = (unmatchedSeen[key] || 0) + 1;
+      unmatchedSeen[key] = (unmatchedSeen[key] || 0) + count;
     }
   }
   unmatchedGrados = Object.keys(unmatchedSeen).map(k => {
     const sample = personas.find(p => normalize(p.grado) === k);
     return { norm: k, label: sample ? sample.grado : k, count: unmatchedSeen[k] };
   }).sort((a,b) => b.count - a.count);
+}
 
+function renderAll(){
   renderKPIs();
   renderPctTable();
   renderGuarnicionChartAndTable();
   renderGradoTable();
   renderVerify();
-  renderVerifyDestinos();
   renderFilters();
   renderDetailTable();
 
@@ -531,7 +491,7 @@ function recomputeAndRender(){
 /* ==================== RENDER: KPIs ==================== */
 function renderKPIs(){
   const total = personas.reduce((s,p) => s + p.suplemento, 0);
-  const count = personas.length;
+  const count = personas.reduce((s,p) => s + (p.count || 1), 0);
   const avg = count ? total / count : 0;
 
   const byG = {};
@@ -547,40 +507,60 @@ function renderKPIs(){
 
 /* ==================== RENDER: % matrix ==================== */
 function renderPctTable(){
-  const totalsByGuarnicion = {};
-  const countByGuarnicion = {};
+  const totals = {}, counts = {};
   for (const p of personas) {
-    totalsByGuarnicion[p.guarnicion] = (totalsByGuarnicion[p.guarnicion] || 0) + p.suplemento;
-    countByGuarnicion[p.guarnicion] = (countByGuarnicion[p.guarnicion] || 0) + 1;
+    totals[p.guarnicion] = (totals[p.guarnicion] || 0) + p.suplemento;
+    counts[p.guarnicion] = (counts[p.guarnicion] || 0) + (p.count || 1);
   }
 
   let html = '<thead><tr><th>Guarnición</th><th class="num">Personal</th><th class="num">%</th><th class="num">Total guarnición</th></tr></thead><tbody>';
   for (const g of guarniciones) {
-    const hasDefault = DEFAULT_PCT[normalize(g)] !== undefined;
     const val = pctMatrix[g] || 0;
-    html += `<tr><td>${g}${hasDefault ? '' : ' <span class="flag" title="No estaba en la lista de % que me pasaste — revisá la carga">⚠ sin referencia</span>'}</td>
-      <td class="num">${countByGuarnicion[g] || 0}</td>
-      <td class="num"><input class="pct-input" type="number" step="0.1" min="0" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
-      <td class="num">${money(totalsByGuarnicion[g] || 0)}</td></tr>`;
+    html += `<tr data-g="${escapeAttr(g)}">
+      <td>${g}</td>
+      <td class="num pct-row-count">${(counts[g]||0).toLocaleString('es-AR')}</td>
+      <td class="num"><input class="pct-input" type="number" step="1" min="0" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
+      <td class="num pct-row-total">${money(totals[g] || 0)}</td>
+    </tr>`;
   }
   const grandTotal = personas.reduce((s,p)=>s+p.suplemento,0);
-  html += `</tbody><tfoot><tr><td>Total</td><td class="num">${personas.length}</td><td class="num"></td><td class="num">${money(grandTotal)}</td></tr></tfoot>`;
+  html += `</tbody><tfoot><tr><td>Total</td><td class="num">${personas.reduce((s,p)=>s+(p.count||1),0).toLocaleString('es-AR')}</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
   document.querySelectorAll('.pct-input').forEach(inp => {
     inp.addEventListener('input', () => {
       const g = inp.dataset.g;
-      const v = parseFloat(inp.value.replace(',', '.')) || 0;
-      pctMatrix[g] = v;
+      const v = parseFloat(inp.value.replace(',', '.'));
+      pctMatrix[g] = isNaN(v) ? 0 : v;
       savePct();
-      recomputeAndRender();
-      // keep focus after full re-render
-      const again = document.querySelector(`.pct-input[data-g="${escapeAttr(g)}"]`);
-      if (again) { again.focus(); const pos = again.value.length; again.setSelectionRange(pos,pos); }
+      computeAll();
+      // actualiza todo excepto la propia tabla de % (para no perder el foco del input)
+      renderKPIs();
+      renderGuarnicionChartAndTable();
+      renderGradoTable();
+      renderVerify();
+      renderFilters();
+      renderDetailTable();
+      updatePctTableTotalsInPlace();
     });
   });
 }
-function escapeAttr(s){ return s.replace(/"/g,'&quot;'); }
+function updatePctTableTotalsInPlace(){
+  const totals = {}, counts = {};
+  for (const p of personas) {
+    totals[p.guarnicion] = (totals[p.guarnicion] || 0) + p.suplemento;
+    counts[p.guarnicion] = (counts[p.guarnicion] || 0) + (p.count || 1);
+  }
+  document.querySelectorAll('#pctTable tbody tr').forEach(tr => {
+    const g = tr.dataset.g;
+    const totalCell = tr.querySelector('.pct-row-total');
+    const countCell = tr.querySelector('.pct-row-count');
+    if (totalCell) totalCell.textContent = money(totals[g] || 0);
+    if (countCell) countCell.textContent = (counts[g] || 0).toLocaleString('es-AR');
+  });
+  const gt = document.getElementById('pctGrandTotal');
+  if (gt) gt.textContent = money(personas.reduce((s,p)=>s+p.suplemento,0));
+}
 
 /* ==================== RENDER: guarnición chart + table ==================== */
 function renderGuarnicionChartAndTable(){
@@ -588,7 +568,7 @@ function renderGuarnicionChartAndTable(){
   const countG = {};
   for (const p of personas) {
     byG[p.guarnicion] = (byG[p.guarnicion] || 0) + p.suplemento;
-    countG[p.guarnicion] = (countG[p.guarnicion] || 0) + 1;
+    countG[p.guarnicion] = (countG[p.guarnicion] || 0) + (p.count || 1);
   }
   const sorted = Object.entries(byG).sort((a,b) => b[1]-a[1]);
 
@@ -611,7 +591,7 @@ function renderGuarnicionChartAndTable(){
 
   let html = '<thead><tr><th>Guarnición</th><th class="num">Personal</th><th class="num">Total</th></tr></thead><tbody>';
   for (const [g, v] of sorted) {
-    html += `<tr><td>${g}</td><td class="num">${countG[g]}</td><td class="num">${money(v)}</td></tr>`;
+    html += `<tr><td>${g}</td><td class="num">${(countG[g]||0).toLocaleString('es-AR')}</td><td class="num">${money(v)}</td></tr>`;
   }
   html += '</tbody>';
   document.getElementById('guarnicionTable').innerHTML = html;
@@ -623,19 +603,19 @@ function renderGradoTable(){
   for (const p of personas) {
     const key = p.grado || '(sin grado)';
     if (!byGrado[key]) byGrado[key] = { count: 0, total: 0, haber: p.haber, matched: p.matched };
-    byGrado[key].count++;
+    byGrado[key].count += (p.count || 1);
     byGrado[key].total += p.suplemento;
   }
   const rows = Object.entries(byGrado).sort((a,b) => b[1].total - a[1].total);
   let html = '<thead><tr><th>Grado</th><th class="num">Personal</th><th class="num">Haber básico</th><th class="num">Total suplemento</th></tr></thead><tbody>';
   for (const [grado, d] of rows) {
-    html += `<tr class="${d.matched ? '' : 'unmatched'}"><td>${grado}${d.matched ? '' : ' <span class="flag">⚠ sin haber básico</span>'}</td><td class="num">${d.count}</td><td class="num">${d.matched ? money(d.haber) : '—'}</td><td class="num">${money(d.total)}</td></tr>`;
+    html += `<tr class="${d.matched ? '' : 'unmatched'}"><td>${grado}${d.matched ? '' : ' <span class="flag">⚠ sin haber básico</span>'}</td><td class="num">${d.count.toLocaleString('es-AR')}</td><td class="num">${d.matched ? money(d.haber) : '—'}</td><td class="num">${money(d.total)}</td></tr>`;
   }
   html += '</tbody>';
   document.getElementById('gradoTable').innerHTML = html;
 }
 
-/* ==================== RENDER: verification panel ==================== */
+/* ==================== RENDER: verificación de grados ==================== */
 function renderVerify(){
   const countEl = document.getElementById('verifyCount');
   const rowsEl = document.getElementById('verifyRows');
@@ -672,53 +652,13 @@ function renderVerify(){
       if (sel.value) gradoMap[normG] = normalize(sel.value);
       else delete gradoMap[normG];
       saveMap();
-      recomputeAndRender();
+      computeAll();
+      renderAll();
     });
   });
 }
 
-/* ==================== RENDER: verification panel — destinos de Soldados Voluntarios ==================== */
-function renderVerifyDestinos(){
-  const section = document.getElementById('verifyDestinosSection');
-  const countEl = document.getElementById('verifyDestinosCount');
-  const rowsEl = document.getElementById('verifyDestinosRows');
-  const details = document.getElementById('verifyDestinosDetails');
-
-  if (unmatchedDestinos.length === 0) {
-    section.style.display = 'none';
-    return;
-  }
-  section.style.display = '';
-  countEl.innerHTML = `<span class="flag">(${unmatchedDestinos.length} destino${unmatchedDestinos.length>1?'s':''} sin guarnición, ${unmatchedDestinos.reduce((s,u)=>s+u.count,0)} soldados afectados)</span>`;
-  details.open = true;
-
-  const guarnicionOptions = guarniciones.map(g => `<option value="${escapeAttr(g)}">${g}</option>`).join('');
-
-  let html = '';
-  for (const u of unmatchedDestinos) {
-    html += `<div class="map-row">
-      <strong>${u.label}</strong>
-      <span class="note" style="color:var(--ink-soft);">(${u.count} persona${u.count>1?'s':''})</span>
-      <select data-normd="${escapeAttr(u.norm)}">
-        <option value="">— asignar guarnición —</option>
-        ${guarnicionOptions}
-      </select>
-    </div>`;
-  }
-  rowsEl.innerHTML = html;
-  rowsEl.querySelectorAll('select').forEach(sel => {
-    const normD = sel.dataset.normd;
-    if (destinoMap[normD]) sel.value = destinoMap[normD];
-    sel.addEventListener('change', () => {
-      if (sel.value) destinoMap[normD] = sel.value;
-      else delete destinoMap[normD];
-      saveDestinoMap();
-      recomputeAndRender();
-    });
-  });
-}
-
-/* ==================== RENDER: filters + detail table ==================== */
+/* ==================== RENDER: filtros + detalle ==================== */
 function renderFilters(){
   const fTipo = document.getElementById('filterTipo');
   const fGuarnicion = document.getElementById('filterGuarnicion');
@@ -757,11 +697,12 @@ function currentFilteredPersonas(){
 
 function renderDetailTable(){
   const rows = currentFilteredPersonas().sort((a,b) => b.suplemento - a.suplemento);
-  let html = '<thead><tr><th>Apellido y Nombres</th><th>DNI</th><th>Tipo</th><th>Grado</th><th>Arma/Serv</th><th>Guarnición</th><th class="num">Haber básico</th><th class="num">%</th><th class="num">Suplemento</th></tr></thead><tbody>';
+  let html = '<thead><tr><th>Apellido y Nombres</th><th>DNI</th><th>Tipo</th><th>Grado</th><th>Arma/Serv</th><th>Guarnición</th><th class="num">Cantidad</th><th class="num">Haber básico</th><th class="num">%</th><th class="num">Suplemento</th></tr></thead><tbody>';
   for (const p of rows) {
     html += `<tr class="${p.matched ? '' : 'unmatched'}">
       <td>${p.nombre}</td><td class="mono">${p.dni}</td><td>${p.tipo}</td><td>${p.grado}${p.matched ? '' : ' <span class="flag">⚠</span>'}</td>
       <td>${p.arma}</td><td>${p.guarnicion}</td>
+      <td class="num">${(p.count||1).toLocaleString('es-AR')}</td>
       <td class="num">${p.matched ? money(p.haber) : '—'}</td>
       <td class="num">${p.pct.toLocaleString('es-AR')}%</td>
       <td class="num">${money(p.suplemento)}</td>
@@ -775,10 +716,10 @@ function renderDetailTable(){
 /* ==================== EXPORT ==================== */
 function exportCSV(){
   const rows = currentFilteredPersonas().sort((a,b) => b.suplemento - a.suplemento);
-  const header = ['Apellido y Nombres','DNI','Tipo','Grado','Arma/Serv','Guarnición','Haber básico','%','Suplemento'];
+  const header = ['Apellido y Nombres','DNI','Tipo','Grado','Arma/Serv','Guarnición','Cantidad','Haber básico','%','Suplemento'];
   const lines = [header.join(';')];
   for (const p of rows) {
-    lines.push([p.nombre, p.dni, p.tipo, p.grado, p.arma, p.guarnicion,
+    lines.push([p.nombre, p.dni, p.tipo, p.grado, p.arma, p.guarnicion, (p.count||1),
       p.matched ? p.haber : '', p.pct, p.suplemento.toFixed(2)].map(v => `"${(v ?? '').toString().replace(/"/g,'""')}"`).join(';'));
   }
   const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -793,13 +734,15 @@ function exportCSV(){
 document.getElementById('refreshBtn').addEventListener('click', loadAll);
 document.getElementById('monthSelect').addEventListener('change', (e) => {
   selectedMonth = e.target.value;
-  recomputeAndRender();
+  computeAll();
+  renderAll();
 });
 document.getElementById('resetPctBtn').addEventListener('click', () => {
   if (!confirm('¿Restablecer todos los % a cero?')) return;
   for (const g of guarniciones) pctMatrix[g] = 0;
   savePct();
-  recomputeAndRender();
+  computeAll();
+  renderAll();
 });
 document.getElementById('exportBtn').addEventListener('click', exportCSV);
 
