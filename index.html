@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estudio de % de Zonas — Suplemento de Guarnición</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#182241; --navy-2:#233258; --gold:#c8a84b; --gold-2:#a8872f;
+    --paper:#f6f3ea; --card:#ffffff; --ink:#20242b; --ink-soft:#666c78;
+    --line:#e1dcca; --positive:#4c7a5c; --alert:#a04a3c; --amber:#f8ecc9;
+    --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;line-height:1.5;}
+  h1,h2,h3{font-family:'Source Serif 4',serif;font-weight:600;margin:0;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  header.top{background:var(--navy);color:#f2efe4;padding:28px 40px;}
+  .top-inner{max-width:1240px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;}
+  header.top h1{font-size:1.7rem;color:#fff;}
+  header.top .subtitle{color:#b9c0d4;font-size:.92rem;margin-top:6px;}
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .controls label{font-size:.78rem;color:#b9c0d4;display:block;margin-bottom:3px;}
+  select, .btn{
+    font-family:'IBM Plex Sans',sans-serif;font-size:.88rem;padding:7px 12px;
+    border-radius:var(--radius);border:1px solid #3a4870;background:#0f1830;color:#f2efe4;
+  }
+  .btn{background:var(--gold);color:#1a1608;border:none;cursor:pointer;font-weight:600;}
+  .btn:hover{background:var(--gold-2);}
+  .btn.secondary{background:transparent;border:1px solid #48587f;color:#dfe3ee;}
+  .btn.secondary:hover{border-color:var(--gold);color:var(--gold);}
+
+  main{max-width:1240px;margin:0 auto;padding:32px 40px 80px;}
+
+  #status{padding:14px 18px;background:var(--amber);border:1px solid #e3ce8a;border-radius:var(--radius);margin-bottom:24px;font-size:.9rem;display:none;}
+  #status.show{display:block;}
+  #status.error{background:#f6e0da;border-color:#e0b3a6;color:var(--alert);}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:36px;}
+  .kpi{background:var(--card);padding:20px 22px;}
+  .kpi .label{font-size:.82rem;color:var(--ink-soft);margin-bottom:8px;}
+  .kpi .value{font-family:'Source Serif 4',serif;font-size:1.9rem;font-weight:600;color:var(--navy);}
+  .kpi .value small{font-size:1rem;font-weight:400;color:var(--ink-soft);}
+
+  section{margin-bottom:40px;}
+  .section-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--navy);padding-bottom:8px;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
+  .section-head h2{font-size:1.15rem;color:var(--navy);}
+  .section-head .note{font-size:.82rem;color:var(--ink-soft);}
+
+  .two-col{display:grid;grid-template-columns:1.1fr 1fr;gap:28px;align-items:start;}
+  @media (max-width:900px){.two-col{grid-template-columns:1fr;} .kpis{grid-template-columns:repeat(2,1fr);}}
+
+  .panel{background:var(--card);border:1px solid var(--line);padding:20px;}
+
+  table{width:100%;border-collapse:collapse;font-size:.87rem;}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);}
+  th{color:var(--ink-soft);font-weight:500;font-size:.78rem;}
+  tbody tr:hover{background:#faf8f2;}
+  td.num, th.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+
+  .pct-table td.num{position:relative;}
+  .pct-input{width:64px;text-align:right;border:none;border-bottom:1px solid var(--line);background:transparent;font-family:'IBM Plex Mono',monospace;font-size:.87rem;padding:4px 16px 4px 4px;color:var(--ink);}
+  .pct-input:focus{outline:none;border-bottom:2px solid var(--gold-2);}
+  .pct-suffix{position:absolute;right:10px;top:9px;font-size:.8rem;color:var(--ink-soft);pointer-events:none;}
+  .pct-table tfoot td{font-weight:600;border-top:2px solid var(--navy);border-bottom:none;}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .filters select, .filters input{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:.85rem;background:#fff;}
+  .filters input[type=text]{min-width:200px;}
+
+  .table-scroll{max-height:480px;overflow:auto;border:1px solid var(--line);}
+  .table-scroll table{margin:0;}
+  .table-scroll thead th{position:sticky;top:0;background:var(--card);z-index:1;}
+
+  tr.unmatched{background:var(--amber);}
+  .flag{color:var(--alert);font-weight:600;font-size:.78rem;}
+
+  details.verify{border:1px solid var(--line);background:var(--card);padding:16px 20px;}
+  details.verify summary{cursor:pointer;font-weight:600;color:var(--navy);font-family:'Source Serif 4',serif;font-size:1.05rem;}
+  .map-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .map-row select{flex:1;min-width:220px;padding:5px 8px;border:1px solid var(--line);}
+
+  footer{max-width:1240px;margin:0 auto;padding:0 40px 50px;color:var(--ink-soft);font-size:.8rem;}
+  a{color:var(--navy);}
+
+  .empty{padding:30px;text-align:center;color:var(--ink-soft);font-style:italic;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div>
+      <h1>Estudio de % de Zonas</h1>
+      <div class="subtitle">Gasto en suplemento de guarnición — personal Oficiales, Suboficiales y Soldados Voluntarios</div>
+    </div>
+    <div class="controls">
+      <div>
+        <label for="monthSelect">Mes de haber básico</label>
+        <select id="monthSelect"></select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button class="btn secondary" id="refreshBtn">Actualizar datos</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="status"></div>
+
+  <div class="kpis" id="kpis" style="display:none;">
+    <div class="kpi"><div class="label">Total mensual en suplemento de zona</div><div class="value" id="kpiTotal">—</div></div>
+    <div class="kpi"><div class="label">Personal computado</div><div class="value" id="kpiCount">—</div></div>
+    <div class="kpi"><div class="label">Promedio por persona</div><div class="value" id="kpiAvg">—</div></div>
+    <div class="kpi"><div class="label">Guarnición de mayor gasto</div><div class="value" id="kpiTop">—</div></div>
+  </div>
+
+  <section class="two-col" id="mainGrid" style="display:none;">
+    <div>
+      <div class="section-head">
+        <h2>Matriz de % por guarnición y tipo de personal</h2>
+        <span class="note">Editable — se guarda en este navegador</span>
+      </div>
+      <div class="panel">
+        <table class="pct-table" id="pctTable"></table>
+        <div style="margin-top:12px;">
+          <button class="btn secondary" id="resetPctBtn">Restablecer todos los % a cero</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section-head">
+        <h2>Gasto por guarnición</h2>
+        <span class="note">Se recalcula al instante</span>
+      </div>
+      <div class="panel">
+        <canvas id="guarnicionChart" height="220"></canvas>
+        <table id="guarnicionTable" style="margin-top:18px;"></table>
+      </div>
+    </div>
+  </section>
+
+  <section id="gradoSection" style="display:none;">
+    <div class="section-head">
+      <h2>Desglose por grado</h2>
+    </div>
+    <div class="panel">
+      <table id="gradoTable"></table>
+    </div>
+  </section>
+
+  <section id="verifySection" style="display:none;">
+    <details class="verify" id="verifyDetails">
+      <summary>Verificación de grados sin haber básico asignado <span id="verifyCount"></span></summary>
+      <p class="note" style="color:var(--ink-soft);font-size:.85rem;margin:10px 0 4px;">
+        Estos grados aparecen en el listado de personal pero no coinciden con ningún grado de la planilla de haberes básicos.
+        Asigná manualmente a cuál corresponden para que entren en el cálculo.
+      </p>
+      <div id="verifyRows"></div>
+    </details>
+  </section>
+
+  <section id="detailSection" style="display:none;">
+    <div class="section-head">
+      <h2>Detalle de personal</h2>
+      <button class="btn secondary" id="exportBtn">Exportar CSV</button>
+    </div>
+    <div class="filters">
+      <select id="filterTipo"><option value="">Todos los tipos</option></select>
+      <select id="filterGuarnicion"><option value="">Todas las guarniciones</option></select>
+      <select id="filterGrado"><option value="">Todos los grados</option></select>
+      <input type="text" id="filterSearch" placeholder="Buscar por apellido o DNI…">
+    </div>
+    <div class="panel table-scroll">
+      <table id="detailTable"></table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Personal leído en vivo desde la planilla de guarniciones · Haberes básicos leídos en vivo desde la planilla de aumentos, columna del mes seleccionado.
+  Los datos no se escriben ni modifican en ninguna de las dos planillas: esta herramienta solo lee.
+</footer>
+
+<script>
+/* ==================== CONFIG ==================== */
+const SHEET_PERSONAL_ID = '1iIVBTWeOpdtp2Np13KbkgHXsxgHNTpt2iuz8r_3XVQY';
+const SHEET_HABERES_ID  = '1nKymrJqwL9mhRl8y-X54RKsAaxbpRY3N1Yj5lXeAeYo';
+const HABERES_TAB = 'Aumentos';
+const TABS = [
+  { name: 'Oficiales',             tipo: 'Oficial' },
+  { name: 'Suboficiales',          tipo: 'Suboficial' },
+  { name: 'Soldados voluntarios',  tipo: 'Soldado Voluntario' }
+];
+const TIPOS = TABS.map(t => t.tipo);
+const LS_PCT = 'ezz_pct_matrix_v1';
+const LS_MAP = 'ezz_grado_map_v1';
+
+/* ==================== STATE ==================== */
+let personas = [];          // registros crudos de las 3 pestañas
+let haberesMap = {};        // normGrado -> { label, valuesByHeader }
+let monthHeaders = [];      // columnas de mes detectadas en la planilla de haberes
+let selectedMonth = null;
+let guarniciones = [];      // lista única de guarniciones detectadas
+let pctMatrix = {};         // guarnicion -> { tipo: pct }
+let gradoMap = {};          // normGrado(personal) -> normGrado(haberes) manual override
+let unmatchedGrados = [];   // [{normG, label, count}]
+let chart = null;
+
+/* ==================== UTIL ==================== */
+function normalize(s){
+  return (s || '').toString().trim().toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\s+/g,' ');
+}
+function parseARNumber(s){
+  if (s === undefined || s === null || s === '') return null;
+  let t = s.toString().trim();
+  if (t === '') return null;
+  t = t.replace(/[^\d,.\-]/g,'');
+  if (t.indexOf(',') > -1 && t.indexOf('.') > -1) {
+    t = t.replace(/\./g,'').replace(',', '.');
+  } else if (t.indexOf(',') > -1) {
+    t = t.replace(',', '.');
+  }
+  const n = parseFloat(t);
+  return isNaN(n) ? null : n;
+}
+function money(n){
+  return '$ ' + (n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+}
+function setStatus(msg, isError){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'show' + (isError ? ' error' : '');
+}
+function clearStatus(){
+  document.getElementById('status').className = '';
+}
+function gvizUrl(sheetId, tabName){
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+}
+async function fetchCSV(url){
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const text = await res.text();
+  return new Promise((resolve, reject) => {
+    Papa.parse(text, { header: true, skipEmptyLines: true, complete: r => resolve(r.data), error: reject });
+  });
+}
+
+/* month detection */
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const ABBR = { ene:'enero', feb:'febrero', mar:'marzo', abr:'abril', may:'mayo', jun:'junio',
+               jul:'julio', ago:'agosto', sep:'septiembre', set:'septiembre', oct:'octubre',
+               nov:'noviembre', dic:'diciembre' };
+function monthKeyFromHeader(h){
+  const n = h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  for (const full of MESES) if (n.startsWith(full)) return full;
+  for (const [abbr, full] of Object.entries(ABBR)) if (n.startsWith(abbr)) return full;
+  return null;
+}
+
+/* ==================== LOAD ==================== */
+async function loadAll(){
+  setStatus('Leyendo planillas de Google Sheets…');
+  document.getElementById('kpis').style.display = 'none';
+  document.getElementById('mainGrid').style.display = 'none';
+  document.getElementById('gradoSection').style.display = 'none';
+  document.getElementById('verifySection').style.display = 'none';
+  document.getElementById('detailSection').style.display = 'none';
+
+  try {
+    // -- personal --
+    personas = [];
+    for (const tab of TABS) {
+      const rows = await fetchCSV(gvizUrl(SHEET_PERSONAL_ID, tab.name));
+      for (const r of rows) {
+        const nombre = (r['Apellido y Nombres'] || '').trim();
+        const dni = (r['DNI'] || '').trim();
+        if (!nombre && !dni) continue;
+        personas.push({
+          tipo: tab.tipo,
+          grado: (r['Grado'] || '').trim(),
+          arma: (r['Arma/Serv'] || '').trim(),
+          guarnicion: (r['Guarnición'] || '').trim() || '(sin dato)',
+          nombre, dni,
+          destino: (r['Destino Actual'] || '').trim()
+        });
+      }
+    }
+    if (personas.length === 0) throw new Error('No se encontraron registros de personal en las tres pestañas.');
+
+    // -- haberes --
+    const hRows = await fetchCSV(gvizUrl(SHEET_HABERES_ID, HABERES_TAB));
+    if (hRows.length === 0) throw new Error('La pestaña "' + HABERES_TAB + '" no devolvió filas.');
+    const headers = Object.keys(hRows[0]);
+    monthHeaders = headers.filter(h => monthKeyFromHeader(h));
+    haberesMap = {};
+    for (const r of hRows) {
+      const gradoLabel = (r['Grados'] || '').trim();
+      if (!gradoLabel) continue;
+      const norm = normalize(gradoLabel);
+      const valuesByHeader = {};
+      for (const h of monthHeaders) valuesByHeader[h] = parseARNumber(r[h]);
+      haberesMap[norm] = { label: gradoLabel, valuesByHeader };
+    }
+
+    // month select
+    const now = new Date();
+    const currentMonthKey = MESES[now.getMonth()];
+    let defaultHeader = monthHeaders.find(h => monthKeyFromHeader(h) === currentMonthKey) || monthHeaders[monthHeaders.length - 1];
+    const sel = document.getElementById('monthSelect');
+    sel.innerHTML = monthHeaders.map(h => `<option value="${h}">${h}</option>`).join('');
+    sel.value = defaultHeader;
+    selectedMonth = defaultHeader;
+
+    // guarniciones list
+    guarniciones = [...new Set(personas.map(p => p.guarnicion))].sort((a,b)=>a.localeCompare(b,'es'));
+
+    // load saved state
+    loadLocalState();
+
+    clearStatus();
+    recomputeAndRender();
+  } catch (err) {
+    console.error(err);
+    setStatus('No se pudieron leer las planillas: ' + err.message + '. Verificá que ambas estén compartidas como "Cualquiera con el enlace: Lector" y que los nombres de pestaña coincidan exactamente.', true);
+  }
+}
+
+function loadLocalState(){
+  try {
+    const savedPct = JSON.parse(localStorage.getItem(LS_PCT) || '{}');
+    pctMatrix = {};
+    for (const g of guarniciones) {
+      pctMatrix[g] = {};
+      for (const t of TIPOS) pctMatrix[g][t] = (savedPct[g] && savedPct[g][t]) || 0;
+    }
+    gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
+  } catch(e) {
+    pctMatrix = {}; gradoMap = {};
+    for (const g of guarniciones) { pctMatrix[g] = {}; for (const t of TIPOS) pctMatrix[g][t] = 0; }
+  }
+}
+function savePct(){ localStorage.setItem(LS_PCT, JSON.stringify(pctMatrix)); }
+function saveMap(){ localStorage.setItem(LS_MAP, JSON.stringify(gradoMap)); }
+
+/* ==================== COMPUTE ==================== */
+function haberFor(gradoRaw){
+  const norm = normalize(gradoRaw);
+  const mapped = gradoMap[norm] || norm;
+  const info = haberesMap[mapped];
+  if (!info) return { value: null, matched: false, label: gradoRaw };
+  const value = info.valuesByHeader[selectedMonth];
+  return { value: value === undefined ? null : value, matched: true, label: gradoRaw };
+}
+
+function recomputeAndRender(){
+  unmatchedGrados = [];
+  const unmatchedSeen = {};
+
+  for (const p of personas) {
+    const h = haberFor(p.grado);
+    p.haber = h.value;
+    p.matched = h.matched;
+    const pct = (pctMatrix[p.guarnicion] && pctMatrix[p.guarnicion][p.tipo]) || 0;
+    p.pct = pct;
+    p.suplemento = (h.value || 0) * pct / 100;
+
+    if (!h.matched) {
+      const key = normalize(p.grado);
+      unmatchedSeen[key] = (unmatchedSeen[key] || 0) + 1;
+    }
+  }
+  unmatchedGrados = Object.keys(unmatchedSeen).map(k => {
+    const sample = personas.find(p => normalize(p.grado) === k);
+    return { norm: k, label: sample ? sample.grado : k, count: unmatchedSeen[k] };
+  }).sort((a,b) => b.count - a.count);
+
+  renderKPIs();
+  renderPctTable();
+  renderGuarnicionChartAndTable();
+  renderGradoTable();
+  renderVerify();
+  renderFilters();
+  renderDetailTable();
+
+  document.getElementById('kpis').style.display = '';
+  document.getElementById('mainGrid').style.display = '';
+  document.getElementById('gradoSection').style.display = '';
+  document.getElementById('verifySection').style.display = '';
+  document.getElementById('detailSection').style.display = '';
+}
+
+/* ==================== RENDER: KPIs ==================== */
+function renderKPIs(){
+  const total = personas.reduce((s,p) => s + p.suplemento, 0);
+  const count = personas.length;
+  const avg = count ? total / count : 0;
+
+  const byG = {};
+  for (const p of personas) byG[p.guarnicion] = (byG[p.guarnicion] || 0) + p.suplemento;
+  let topG = '—', topV = -1;
+  for (const [g,v] of Object.entries(byG)) if (v > topV) { topV = v; topG = g; }
+
+  document.getElementById('kpiTotal').innerHTML = money(total) + ' <small>/ mes</small>';
+  document.getElementById('kpiCount').textContent = count.toLocaleString('es-AR');
+  document.getElementById('kpiAvg').textContent = money(avg);
+  document.getElementById('kpiTop').innerHTML = topG + '<br><small style="font-size:.95rem;">' + money(topV) + '</small>';
+}
+
+/* ==================== RENDER: % matrix ==================== */
+function renderPctTable(){
+  const totalsByGuarnicion = {};
+  for (const p of personas) totalsByGuarnicion[p.guarnicion] = (totalsByGuarnicion[p.guarnicion] || 0) + p.suplemento;
+
+  let html = '<thead><tr><th>Guarnición</th>' + TIPOS.map(t => `<th class="num">${t}</th>`).join('') + '<th class="num">Total guarnición</th></tr></thead><tbody>';
+  for (const g of guarniciones) {
+    html += `<tr><td>${g}</td>`;
+    for (const t of TIPOS) {
+      const val = pctMatrix[g][t];
+      html += `<td class="num"><input class="pct-input" type="number" step="0.1" min="0" data-g="${escapeAttr(g)}" data-t="${escapeAttr(t)}" value="${val}"><span class="pct-suffix">%</span></td>`;
+    }
+    html += `<td class="num">${money(totalsByGuarnicion[g] || 0)}</td></tr>`;
+  }
+  const grandTotal = personas.reduce((s,p)=>s+p.suplemento,0);
+  html += `</tbody><tfoot><tr><td>Total</td>${TIPOS.map(()=>'<td class="num"></td>').join('')}<td class="num">${money(grandTotal)}</td></tr></tfoot>`;
+  document.getElementById('pctTable').innerHTML = html;
+
+  document.querySelectorAll('.pct-input').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const g = inp.dataset.g, t = inp.dataset.t;
+      const v = parseFloat(inp.value.replace(',', '.')) || 0;
+      pctMatrix[g][t] = v;
+      savePct();
+      recomputeAndRender();
+      // keep focus after full re-render
+      const again = document.querySelector(`.pct-input[data-g="${escapeAttr(g)}"][data-t="${escapeAttr(t)}"]`);
+      if (again) { again.focus(); const pos = again.value.length; again.setSelectionRange(pos,pos); }
+    });
+  });
+}
+function escapeAttr(s){ return s.replace(/"/g,'&quot;'); }
+
+/* ==================== RENDER: guarnición chart + table ==================== */
+function renderGuarnicionChartAndTable(){
+  const byG = {};
+  const countG = {};
+  for (const p of personas) {
+    byG[p.guarnicion] = (byG[p.guarnicion] || 0) + p.suplemento;
+    countG[p.guarnicion] = (countG[p.guarnicion] || 0) + 1;
+  }
+  const sorted = Object.entries(byG).sort((a,b) => b[1]-a[1]);
+
+  const ctx = document.getElementById('guarnicionChart');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([g]) => g),
+      datasets: [{ data: sorted.map(([,v]) => v), backgroundColor: '#c8a84b', borderRadius: 2 }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => '$' + v.toLocaleString('es-AR') }, grid: { color: '#eee7d4' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  let html = '<thead><tr><th>Guarnición</th><th class="num">Personal</th><th class="num">Total</th></tr></thead><tbody>';
+  for (const [g, v] of sorted) {
+    html += `<tr><td>${g}</td><td class="num">${countG[g]}</td><td class="num">${money(v)}</td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById('guarnicionTable').innerHTML = html;
+}
+
+/* ==================== RENDER: grado table ==================== */
+function renderGradoTable(){
+  const byGrado = {};
+  for (const p of personas) {
+    const key = p.grado || '(sin grado)';
+    if (!byGrado[key]) byGrado[key] = { count: 0, total: 0, haber: p.haber, matched: p.matched };
+    byGrado[key].count++;
+    byGrado[key].total += p.suplemento;
+  }
+  const rows = Object.entries(byGrado).sort((a,b) => b[1].total - a[1].total);
+  let html = '<thead><tr><th>Grado</th><th class="num">Personal</th><th class="num">Haber básico</th><th class="num">Total suplemento</th></tr></thead><tbody>';
+  for (const [grado, d] of rows) {
+    html += `<tr class="${d.matched ? '' : 'unmatched'}"><td>${grado}${d.matched ? '' : ' <span class="flag">⚠ sin haber básico</span>'}</td><td class="num">${d.count}</td><td class="num">${d.matched ? money(d.haber) : '—'}</td><td class="num">${money(d.total)}</td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById('gradoTable').innerHTML = html;
+}
+
+/* ==================== RENDER: verification panel ==================== */
+function renderVerify(){
+  const countEl = document.getElementById('verifyCount');
+  const rowsEl = document.getElementById('verifyRows');
+  const details = document.getElementById('verifyDetails');
+
+  if (unmatchedGrados.length === 0) {
+    countEl.textContent = '— todos los grados coinciden';
+    rowsEl.innerHTML = '<p class="note" style="color:var(--positive);">Todos los grados del listado de personal tienen un haber básico asignado.</p>';
+    details.open = false;
+    return;
+  }
+  countEl.innerHTML = `<span class="flag">(${unmatchedGrados.length} grado${unmatchedGrados.length>1?'s':''} sin asignar, ${unmatchedGrados.reduce((s,u)=>s+u.count,0)} personas afectadas)</span>`;
+  details.open = true;
+
+  const haberesOptions = Object.values(haberesMap).sort((a,b)=>a.label.localeCompare(b.label,'es'))
+    .map(h => `<option value="${escapeAttr(h.label)}">${h.label}</option>`).join('');
+
+  let html = '';
+  for (const u of unmatchedGrados) {
+    html += `<div class="map-row">
+      <strong>${u.label}</strong>
+      <span class="note" style="color:var(--ink-soft);">(${u.count} persona${u.count>1?'s':''})</span>
+      <select data-normg="${escapeAttr(u.norm)}">
+        <option value="">— asignar a grado de haberes —</option>
+        ${haberesOptions}
+      </select>
+    </div>`;
+  }
+  rowsEl.innerHTML = html;
+  rowsEl.querySelectorAll('select').forEach(sel => {
+    const normG = sel.dataset.normg;
+    if (gradoMap[normG]) sel.value = Object.values(haberesMap).find(h => normalize(h.label) === gradoMap[normG])?.label || '';
+    sel.addEventListener('change', () => {
+      if (sel.value) gradoMap[normG] = normalize(sel.value);
+      else delete gradoMap[normG];
+      saveMap();
+      recomputeAndRender();
+    });
+  });
+}
+
+/* ==================== RENDER: filters + detail table ==================== */
+function renderFilters(){
+  const fTipo = document.getElementById('filterTipo');
+  const fGuarnicion = document.getElementById('filterGuarnicion');
+  const fGrado = document.getElementById('filterGrado');
+
+  const curTipo = fTipo.value, curG = fGuarnicion.value, curGr = fGrado.value;
+
+  fTipo.innerHTML = '<option value="">Todos los tipos</option>' + TIPOS.map(t => `<option value="${t}">${t}</option>`).join('');
+  fGuarnicion.innerHTML = '<option value="">Todas las guarniciones</option>' + guarniciones.map(g => `<option value="${escapeAttr(g)}">${g}</option>`).join('');
+  const grados = [...new Set(personas.map(p => p.grado))].sort((a,b)=>a.localeCompare(b,'es'));
+  fGrado.innerHTML = '<option value="">Todos los grados</option>' + grados.map(g => `<option value="${escapeAttr(g)}">${g}</option>`).join('');
+
+  fTipo.value = curTipo; fGuarnicion.value = curG; fGrado.value = curGr;
+
+  [fTipo, fGuarnicion, fGrado].forEach(el => el.onchange = renderDetailTable);
+  document.getElementById('filterSearch').oninput = renderDetailTable;
+}
+
+function currentFilteredPersonas(){
+  const tipo = document.getElementById('filterTipo').value;
+  const guarnicion = document.getElementById('filterGuarnicion').value;
+  const grado = document.getElementById('filterGrado').value;
+  const search = normalize(document.getElementById('filterSearch').value);
+
+  return personas.filter(p => {
+    if (tipo && p.tipo !== tipo) return false;
+    if (guarnicion && p.guarnicion !== guarnicion) return false;
+    if (grado && p.grado !== grado) return false;
+    if (search) {
+      const hay = normalize(p.nombre) + ' ' + normalize(p.dni);
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function renderDetailTable(){
+  const rows = currentFilteredPersonas().sort((a,b) => b.suplemento - a.suplemento);
+  let html = '<thead><tr><th>Apellido y Nombres</th><th>DNI</th><th>Tipo</th><th>Grado</th><th>Arma/Serv</th><th>Guarnición</th><th class="num">Haber básico</th><th class="num">%</th><th class="num">Suplemento</th></tr></thead><tbody>';
+  for (const p of rows) {
+    html += `<tr class="${p.matched ? '' : 'unmatched'}">
+      <td>${p.nombre}</td><td class="mono">${p.dni}</td><td>${p.tipo}</td><td>${p.grado}${p.matched ? '' : ' <span class="flag">⚠</span>'}</td>
+      <td>${p.arma}</td><td>${p.guarnicion}</td>
+      <td class="num">${p.matched ? money(p.haber) : '—'}</td>
+      <td class="num">${p.pct.toLocaleString('es-AR')}%</td>
+      <td class="num">${money(p.suplemento)}</td>
+    </tr>`;
+  }
+  html += '</tbody>';
+  if (rows.length === 0) html += '<caption class="empty">No hay personal que coincida con los filtros.</caption>';
+  document.getElementById('detailTable').innerHTML = html;
+}
+
+/* ==================== EXPORT ==================== */
+function exportCSV(){
+  const rows = currentFilteredPersonas().sort((a,b) => b.suplemento - a.suplemento);
+  const header = ['Apellido y Nombres','DNI','Tipo','Grado','Arma/Serv','Guarnición','Haber básico','%','Suplemento'];
+  const lines = [header.join(';')];
+  for (const p of rows) {
+    lines.push([p.nombre, p.dni, p.tipo, p.grado, p.arma, p.guarnicion,
+      p.matched ? p.haber : '', p.pct, p.suplemento.toFixed(2)].map(v => `"${(v ?? '').toString().replace(/"/g,'""')}"`).join(';'));
+  }
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'detalle_suplemento_zona_' + selectedMonth.replace(/\s+/g,'_') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ==================== EVENTS ==================== */
+document.getElementById('refreshBtn').addEventListener('click', loadAll);
+document.getElementById('monthSelect').addEventListener('change', (e) => {
+  selectedMonth = e.target.value;
+  recomputeAndRender();
+});
+document.getElementById('resetPctBtn').addEventListener('click', () => {
+  if (!confirm('¿Restablecer todos los % a cero?')) return;
+  for (const g of guarniciones) for (const t of TIPOS) pctMatrix[g][t] = 0;
+  savePct();
+  recomputeAndRender();
+});
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+loadAll();
+</script>
+</body>
+</html>
