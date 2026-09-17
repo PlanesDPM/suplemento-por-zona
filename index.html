@@ -53,10 +53,10 @@
   .section-head h2{font-size:1.15rem;color:var(--navy);}
   .section-head .note{font-size:.82rem;color:var(--ink-soft);}
 
-  .two-col{display:grid;grid-template-columns:1.1fr 1fr;gap:28px;align-items:start;}
-  @media (max-width:900px){.two-col{grid-template-columns:1fr;} .kpis{grid-template-columns:repeat(2,1fr);}}
+  .two-col{display:grid;grid-template-columns:1fr;gap:28px;align-items:start;}
+  @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}}
 
-  .panel{background:var(--card);border:1px solid var(--line);padding:20px;}
+  .panel{background:var(--card);border:1px solid var(--line);padding:20px;overflow-x:auto;}
 
   table{width:100%;border-collapse:collapse;font-size:.87rem;}
   th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);}
@@ -147,15 +147,6 @@
     </div>
   </section>
 
-  <section id="gradoSection" style="display:none;">
-    <div class="section-head">
-      <h2>Desglose por grado</h2>
-    </div>
-    <div class="panel">
-      <table id="gradoTable"></table>
-    </div>
-  </section>
-
   <section id="verifySection" style="display:none;">
     <details class="verify" id="verifyDetails">
       <summary>Verificación de grados sin haber básico asignado <span id="verifyCount"></span></summary>
@@ -167,21 +158,6 @@
     </details>
   </section>
 
-  <section id="detailSection" style="display:none;">
-    <div class="section-head">
-      <h2>Detalle de personal</h2>
-      <button class="btn secondary" id="exportBtn">Exportar CSV</button>
-    </div>
-    <div class="filters">
-      <select id="filterTipo"><option value="">Todos los tipos</option></select>
-      <select id="filterGuarnicion"><option value="">Todas las guarniciones</option></select>
-      <select id="filterGrado"><option value="">Todos los grados</option></select>
-      <input type="text" id="filterSearch" placeholder="Buscar por apellido o DNI…">
-    </div>
-    <div class="panel table-scroll">
-      <table id="detailTable"></table>
-    </div>
-  </section>
 </main>
 
 <footer>
@@ -377,9 +353,7 @@ async function loadAll(){
   setStatus('Leyendo la planilla de personal…');
   document.getElementById('kpis').style.display = 'none';
   document.getElementById('mainGrid').style.display = 'none';
-  document.getElementById('gradoSection').style.display = 'none';
   document.getElementById('verifySection').style.display = 'none';
-  document.getElementById('detailSection').style.display = 'none';
 
   try {
     // -- Oficiales + Suboficiales --
@@ -509,16 +483,11 @@ function renderAll(){
   renderKPIs();
   renderPctTable();
   renderGuarnicionChartAndTable();
-  renderGradoTable();
   renderVerify();
-  renderFilters();
-  renderDetailTable();
 
   document.getElementById('kpis').style.display = '';
   document.getElementById('mainGrid').style.display = '';
-  document.getElementById('gradoSection').style.display = '';
   document.getElementById('verifySection').style.display = '';
-  document.getElementById('detailSection').style.display = '';
 }
 
 /* ==================== RENDER: KPIs ==================== */
@@ -539,21 +508,26 @@ function renderKPIs(){
 /* ==================== RENDER: % matrix ==================== */
 function renderPctTable(){
   const totals = {}, counts = {};
+  const totalEfectivo = personas.reduce((s,p)=>s+(p.count||1),0);
   for (const p of personas) {
     totals[p.guarnicion] = (totals[p.guarnicion] || 0) + p.suplemento;
     if (!counts[p.guarnicion]) counts[p.guarnicion] = { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
     counts[p.guarnicion][p.tipo] += (p.count || 1);
   }
 
-  let html = '<thead><tr><th>Guarnición</th><th class="num">Of</th><th class="num">Subof</th><th class="num">Sold</th><th class="num">%</th><th class="num">Total guarnición</th></tr></thead><tbody>';
+  let html = '<thead><tr><th>Guarnición</th><th class="num">Of</th><th class="num">Subof</th><th class="num">Sold</th><th class="num">Total</th><th class="num">% efectivo</th><th class="num">% zona</th><th class="num">Gasto guarnición</th></tr></thead><tbody>';
   for (const g of guarniciones) {
     const val = pctMatrix[g] || 0;
     const c = counts[g] || { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
+    const totalG = c.Oficial + c.Suboficial + c['Soldado Voluntario'];
+    const pctEfectivo = totalEfectivo ? totalG / totalEfectivo * 100 : 0;
     html += `<tr data-g="${escapeAttr(g)}">
       <td>${g}</td>
       <td class="num pct-row-of">${c.Oficial.toLocaleString('es-AR')}</td>
       <td class="num pct-row-subof">${c.Suboficial.toLocaleString('es-AR')}</td>
       <td class="num pct-row-sold">${c['Soldado Voluntario'].toLocaleString('es-AR')}</td>
+      <td class="num">${totalG.toLocaleString('es-AR')}</td>
+      <td class="num">${pctEfectivo.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td>
       <td class="num"><input class="pct-input" type="number" step="5" min="0" max="100" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
       <td class="num pct-row-total">${money(totals[g] || 0)}</td>
     </tr>`;
@@ -562,7 +536,7 @@ function renderPctTable(){
   const totalOf = personas.filter(p=>p.tipo==='Oficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSubof = personas.filter(p=>p.tipo==='Suboficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSold = personas.filter(p=>p.tipo==='Soldado Voluntario').reduce((s,p)=>s+(p.count||1),0);
-  html += `</tbody><tfoot><tr><td>Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
+  html += `</tbody><tfoot><tr><td>Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
   document.querySelectorAll('.pct-input').forEach(inp => {
@@ -578,9 +552,7 @@ function renderPctTable(){
         // El recálculo se ejecuta una sola vez cuando termina la secuencia de pulsaciones.
         renderKPIs();
         renderGuarnicionChartAndTable();
-        renderGradoTable();
         renderVerify();
-        renderDetailTable();
         updatePctTableTotalsInPlace();
       }, 220);
     };
@@ -606,6 +578,7 @@ function updatePctTableTotalsInPlace(){
 function renderGuarnicionChartAndTable(){
   const byG = {};
   const countG = {};
+  const totalEfectivo = personas.reduce((s,p)=>s+(p.count||1),0);
   for (const p of personas) {
     byG[p.guarnicion] = (byG[p.guarnicion] || 0) + p.suplemento;
     if (!countG[p.guarnicion]) countG[p.guarnicion] = { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
@@ -630,10 +603,12 @@ function renderGuarnicionChartAndTable(){
     }
   });
 
-  let html = '<thead><tr><th>Guarnición</th><th class="num">Of</th><th class="num">Subof</th><th class="num">Sold</th><th class="num">Total</th></tr></thead><tbody>';
+  let html = '<thead><tr><th>Guarnición</th><th class="num">Of</th><th class="num">Subof</th><th class="num">Sold</th><th class="num">Total</th><th class="num">% efectivo</th><th class="num">Gasto</th></tr></thead><tbody>';
   for (const [g, v] of sorted) {
     const c = countG[g] || { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
-    html += `<tr><td>${g}</td><td class="num">${c.Oficial.toLocaleString('es-AR')}</td><td class="num">${c.Suboficial.toLocaleString('es-AR')}</td><td class="num">${c['Soldado Voluntario'].toLocaleString('es-AR')}</td><td class="num">${money(v)}</td></tr>`;
+    const totalG = c.Oficial + c.Suboficial + c['Soldado Voluntario'];
+    const pctEfectivo = totalEfectivo ? totalG / totalEfectivo * 100 : 0;
+    html += `<tr><td>${g}</td><td class="num">${c.Oficial.toLocaleString('es-AR')}</td><td class="num">${c.Suboficial.toLocaleString('es-AR')}</td><td class="num">${c['Soldado Voluntario'].toLocaleString('es-AR')}</td><td class="num">${totalG.toLocaleString('es-AR')}</td><td class="num">${pctEfectivo.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td><td class="num">${money(v)}</td></tr>`;
   }
   html += '</tbody>';
   document.getElementById('guarnicionTable').innerHTML = html;
@@ -787,8 +762,6 @@ document.getElementById('resetPctBtn').addEventListener('click', () => {
   computeAll();
   renderAll();
 });
-document.getElementById('exportBtn').addEventListener('click', exportCSV);
-
 loadAll();
 </script>
 </body>
