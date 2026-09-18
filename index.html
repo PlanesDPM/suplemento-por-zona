@@ -42,7 +42,7 @@
   #status.show{display:block;}
   #status.error{background:#f6e0da;border-color:#e0b3a6;color:var(--alert);}
 
-  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:36px;}
+  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:36px;}
   .kpi{background:var(--card);padding:20px 22px;}
   .kpi .label{font-size:.82rem;color:var(--ink-soft);margin-bottom:8px;}
   .kpi .value{font-family:'Source Serif 4',serif;font-size:1.9rem;font-weight:600;color:var(--navy);}
@@ -72,12 +72,28 @@
   .sort-btn{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;font-weight:600;padding:2px 4px;white-space:nowrap;}
   .sort-btn:hover{color:var(--navy);text-decoration:underline;}
   .sort-arrow{display:inline-block;min-width:12px;margin-left:2px;}
-  .force-ea{background:#dff1df !important;}
-  .force-ea-ara{background:#dce8f8 !important;}
-  .force-ea-faa{background:#d9f2f7 !important;}
-  .force-ea-ara-faa{background:#b93636 !important;color:#fff;}
+  .force-ea-ara{background:#d4e1f5 !important;}
+  .force-ea-faa{background:#cceff4 !important;}
+  .force-ea-ara-faa{background:#c95f63 !important;color:#fff;}
   .force-ea-ara-faa .pct-input,.force-ea-ara-faa .pct-suffix{color:#fff;}
   .force-ea-ara-faa td{border-bottom-color:#d97575;}
+  .diff-saving{color:var(--positive) !important;}
+  .diff-extra{color:var(--alert) !important;}
+  .variants-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;overflow:visible;}
+  .variant-card{position:relative;}
+  .variant-main{width:100%;min-height:72px;background:var(--navy);color:#fff;border:0;border-radius:var(--radius);padding:12px;cursor:pointer;text-align:left;font-family:inherit;box-shadow:0 3px 10px rgba(24,34,65,.16);}
+  .variant-main:hover{background:var(--navy-2);transform:translateY(-1px);}
+  .variant-main strong,.variant-main span{display:block;}
+  .variant-main span{font-size:.75rem;color:#c9d0e2;margin-top:5px;}
+  .variant-main.empty{background:#687087;}
+  .variant-main::after{content:attr(data-tooltip);position:absolute;left:0;bottom:calc(100% + 8px);z-index:20;width:360px;max-width:80vw;padding:10px 12px;background:#111a31;color:#fff;border-radius:4px;font-size:.76rem;line-height:1.45;white-space:pre-line;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;visibility:hidden;pointer-events:none;transition:.15s;}
+  .variant-main:hover::after{opacity:1;visibility:visible;}
+  .variant-menu{display:none;position:absolute;z-index:15;left:0;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--line);padding:8px;box-shadow:0 8px 22px rgba(24,34,65,.18);}
+  .variant-card.open .variant-menu{display:grid;gap:6px;}
+  .variant-menu button{border:1px solid var(--line);background:#f8f7f2;padding:7px;cursor:pointer;font-family:inherit;text-align:left;}
+  .variant-menu button:hover{border-color:var(--gold-2);}
+  .variant-menu button:disabled{opacity:.45;cursor:not-allowed;}
+  @media(max-width:900px){.variants-grid{grid-template-columns:repeat(2,1fr);}}
 
   .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .filters select, .filters input{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:.85rem;background:#fff;}
@@ -127,8 +143,7 @@
 
   <div class="kpis" id="kpis" style="display:none;">
     <div class="kpi"><div class="label">Total mensual en suplemento de zona</div><div class="value" id="kpiTotal">—</div></div>
-    <div class="kpi"><div class="label">Personal computado</div><div class="value" id="kpiCount">—</div></div>
-    <div class="kpi"><div class="label">Guarnición de mayor gasto</div><div class="value" id="kpiTop">—</div></div>
+    <div class="kpi"><div class="label">Diferencia respecto de los porcentajes legales</div><div class="value" id="kpiDiff">—</div></div>
   </div>
 
   <section class="two-col" id="mainGrid" style="display:none;">
@@ -155,6 +170,14 @@
         <table id="guarnicionTable" style="margin-top:18px;"></table>
       </div>
     </div>
+  </section>
+
+  <section id="variantsSection" style="display:none;">
+    <div class="section-head">
+      <h2>Variantes guardadas</h2>
+      <span class="note">Se conservan en este navegador · pase el cursor para ver los cambios</span>
+    </div>
+    <div class="variants-grid" id="variantsGrid"></div>
   </section>
 
   <section id="verifySection" style="display:none;">
@@ -187,6 +210,7 @@ const TIPOS = ['Oficial', 'Suboficial', 'Soldado Voluntario'];
 const GRADO_SOLDADO = 'Voluntario de Primera (VP)';
 const LS_PCT = 'ezz_pct_matrix_v2';
 const LS_MAP = 'ezz_grado_map_v1';
+const LS_VARIANTS = 'ezz_pct_variants_v1';
 
 // Haberes básicos mensuales 2026. Fuente: tabla suministrada para esta herramienta.
 // Diciembre 2025 fue excluido. SI febrero fue corregido a $1.037.778.
@@ -305,6 +329,7 @@ let unmatchedGrados = [];   // [{norm, label, count}]
 let chart = null;
 let pctRenderTimer = null;
 let pctSort = { key:'guarnicion', dir:'asc' };
+let variants = [null,null,null,null];
 
 /* ==================== UTIL ==================== */
 function normalize(s){
@@ -401,6 +426,7 @@ async function loadAll(){
   setStatus('Leyendo la planilla de personal…');
   document.getElementById('kpis').style.display = 'none';
   document.getElementById('mainGrid').style.display = 'none';
+  document.getElementById('variantsSection').style.display = 'none';
   document.getElementById('verifySection').style.display = 'none';
 
   try {
@@ -471,8 +497,10 @@ function loadLocalState(){
       pctMatrix[g] = normalizePct(rawPct);
     }
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
+    const savedVariants = JSON.parse(localStorage.getItem(LS_VARIANTS) || '[]');
+    variants = Array.from({length:4},(_,i)=>savedVariants[i] || null);
   } catch(e) {
-    pctMatrix = {}; gradoMap = {};
+    pctMatrix = {}; gradoMap = {}; variants = [null,null,null,null];
     for (const g of guarniciones) pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
   }
 }
@@ -490,6 +518,7 @@ function normalizePct(value){
 }
 function savePct(){ localStorage.setItem(LS_PCT, JSON.stringify(pctMatrix)); }
 function saveMap(){ localStorage.setItem(LS_MAP, JSON.stringify(gradoMap)); }
+function saveVariants(){ localStorage.setItem(LS_VARIANTS, JSON.stringify(variants)); }
 
 /* ==================== COMPUTE (sin tocar el DOM) ==================== */
 function haberFor(gradoRaw){
@@ -531,26 +560,30 @@ function renderAll(){
   renderKPIs();
   renderPctTable();
   renderGuarnicionChartAndTable();
+  renderVariants();
   renderVerify();
 
   document.getElementById('kpis').style.display = '';
   document.getElementById('mainGrid').style.display = '';
+  document.getElementById('variantsSection').style.display = '';
   document.getElementById('verifySection').style.display = '';
 }
 
 /* ==================== RENDER: KPIs ==================== */
 function renderKPIs(){
   const total = personas.reduce((s,p) => s + p.suplemento, 0);
-  const count = personas.reduce((s,p) => s + (p.count || 1), 0);
-
-  const byG = {};
-  for (const p of personas) byG[p.guarnicion] = (byG[p.guarnicion] || 0) + p.suplemento;
-  let topG = '—', topV = -1;
-  for (const [g,v] of Object.entries(byG)) if (v > topV) { topV = v; topG = g; }
+  const legalTotal = personas.reduce((s,p) => {
+    const legalPct = DEFAULT_PCT[normalize(p.guarnicion)] || 0;
+    return s + (p.haber || 0) * legalPct / 100 * (p.count || 1);
+  }, 0);
+  const diff = total - legalTotal;
+  const diffPct = legalTotal ? diff / legalTotal * 100 : 0;
 
   document.getElementById('kpiTotal').innerHTML = money(total) + ' <small>/ mes</small>';
-  document.getElementById('kpiCount').textContent = count.toLocaleString('es-AR');
-  document.getElementById('kpiTop').innerHTML = topG + '<br><small style="font-size:.95rem;">' + money(topV) + '</small>';
+  const diffEl = document.getElementById('kpiDiff');
+  const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
+  diffEl.className = 'value ' + (diff < 0 ? 'diff-saving' : diff > 0 ? 'diff-extra' : '');
+  diffEl.innerHTML = sign + money(Math.abs(diff)) + ` <small>(${diffPct > 0 ? '+' : ''}${diffPct.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%)</small>`;
 }
 
 /* ==================== RENDER: % matrix ==================== */
@@ -590,7 +623,7 @@ function renderPctTable(){
     sortHeader('% zona','pctZona',true) + sortHeader('Gasto guarnición','gasto',true) +
     '</tr></thead><tbody>';
   for (const r of rows) {
-    const forceClass = r.fuerza ? 'force-' + r.fuerza.toLowerCase() : '';
+    const forceClass = r.fuerza && r.fuerza !== 'EA' ? 'force-' + r.fuerza.toLowerCase() : '';
     html += `<tr class="${forceClass}" data-g="${escapeAttr(r.guarnicion)}">
       <td>${r.guarnicion}</td><td class="num">${r.rankingEstudio}</td><td>${r.fuerza}</td><td class="num">${r.rankingDJ}</td>
       <td class="num pct-row-of">${r.of.toLocaleString('es-AR')}</td>
@@ -650,6 +683,64 @@ function updatePctTableTotalsInPlace(){
   const gt = document.getElementById('pctGrandTotal');
   if (gt) gt.textContent = money(personas.reduce((s,p)=>s+p.suplemento,0));
 }
+
+/* ==================== VARIANTES GUARDADAS ==================== */
+function variantChanges(pcts){
+  return guarniciones.map(g => {
+    const legal = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
+    const current = normalizePct(pcts[g] !== undefined ? pcts[g] : legal);
+    if (current === legal) return null;
+    return `${g}: ${current < legal ? 'baja' : 'sube'} de ${legal}% a ${current}%`;
+  }).filter(Boolean);
+}
+function renderVariants(){
+  const grid = document.getElementById('variantsGrid');
+  grid.innerHTML = variants.map((variant,index) => {
+    const changes = variant ? variantChanges(variant.pcts) : [];
+    const fullSummary = !variant ? 'Espacio disponible para guardar una variante.' :
+      (changes.length ? changes.join('\n') : 'Sin cambios respecto de los porcentajes legales.');
+    const preview = changes.length > 8 ? changes.slice(0,8).join('\n') + `\n… y ${changes.length-8} cambios más` : fullSummary;
+    const status = variant ? `${changes.length} cambio${changes.length===1?'':'s'} guardado${changes.length===1?'':'s'}` : 'Sin guardar';
+    return `<div class="variant-card" data-slot="${index}">
+      <button class="variant-main ${variant?'':'empty'}" data-tooltip="${escapeAttr(preview)}" title="${escapeAttr(fullSummary)}">
+        <strong>Variante ${index+1}</strong><span>${status}</span>
+      </button>
+      <div class="variant-menu">
+        <button data-action="save">${variant?'Actualizar con valores actuales':'Guardar valores actuales'}</button>
+        <button data-action="load" ${variant?'':'disabled'}>Aplicar esta variante</button>
+        <button data-action="delete" ${variant?'':'disabled'}>Eliminar variante</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.variant-main').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const card = btn.closest('.variant-card');
+    grid.querySelectorAll('.variant-card').forEach(c => { if(c!==card) c.classList.remove('open'); });
+    card.classList.toggle('open');
+  }));
+  grid.querySelectorAll('.variant-menu button').forEach(btn => btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (btn.disabled) return;
+    const slot = Number(btn.closest('.variant-card').dataset.slot);
+    const action = btn.dataset.action;
+    if (action === 'save') {
+      if (variants[slot] && !confirm(`¿Actualizar la Variante ${slot+1} con los porcentajes actuales?`)) return;
+      variants[slot] = { pcts:{...pctMatrix}, savedAt:new Date().toISOString() };
+      saveVariants(); renderVariants();
+    } else if (action === 'load') {
+      for (const g of guarniciones) {
+        const legal = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
+        pctMatrix[g] = normalizePct(variants[slot].pcts[g] !== undefined ? variants[slot].pcts[g] : legal);
+      }
+      savePct(); computeAll(); renderAll();
+    } else if (action === 'delete') {
+      if (!confirm(`¿Eliminar la Variante ${slot+1}?`)) return;
+      variants[slot] = null; saveVariants(); renderVariants();
+    }
+  }));
+}
+document.addEventListener('click', () => document.querySelectorAll('.variant-card.open').forEach(c=>c.classList.remove('open')));
 
 /* ==================== RENDER: guarnición chart + table ==================== */
 function renderGuarnicionChartAndTable(){
