@@ -69,6 +69,15 @@
   .pct-input:focus{outline:none;border-bottom:2px solid var(--gold-2);}
   .pct-suffix{position:absolute;right:10px;top:9px;font-size:.8rem;color:var(--ink-soft);pointer-events:none;}
   .pct-table tfoot td{font-weight:600;border-top:2px solid var(--navy);border-bottom:none;}
+  .sort-btn{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;font-weight:600;padding:2px 4px;white-space:nowrap;}
+  .sort-btn:hover{color:var(--navy);text-decoration:underline;}
+  .sort-arrow{display:inline-block;min-width:12px;margin-left:2px;}
+  .force-ea{background:#dff1df !important;}
+  .force-ea-ara{background:#dce8f8 !important;}
+  .force-ea-faa{background:#d9f2f7 !important;}
+  .force-ea-ara-faa{background:#b93636 !important;color:#fff;}
+  .force-ea-ara-faa .pct-input,.force-ea-ara-faa .pct-suffix{color:#fff;}
+  .force-ea-ara-faa td{border-bottom-color:#d97575;}
 
   .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .filters select, .filters input{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:.85rem;background:#fff;}
@@ -132,6 +141,7 @@
         <table class="pct-table" id="pctTable"></table>
         <div style="margin-top:12px;">
           <button class="btn secondary" id="resetPctBtn">Restablecer todos los % a cero</button>
+          <button class="btn" id="legalPctBtn">Volver a los % establecidos por ley</button>
         </div>
       </div>
     </div>
@@ -227,6 +237,39 @@ const DEFAULT_PCT_RAW = [
   ["Yapeyú",50],["Zapala",70]
 ];
 
+// Rankings y composición de fuerzas suministrados para el estudio.
+const GUARNICION_META_RAW = [
+  ["Apóstoles",31,"EA",9],["Arana",69,"EA",66],["Azul",52,"EA",59],
+  ["Bahía Blanca",5,"EA-ARA",47],["Bernardo de Irigoyen",82,"EA",27],["CABA",57,"EA-ARA-FAA",4],
+  ["Campo de Mayo - El Palomar",52,"EA-FAA",6],["Campo Los Andes",15,"EA",14],["Catamarca",9,"EA",54],
+  ["Chajarí",46,"EA",52],["City Bell",69,"EA",65],["Colonia Sarmiento",64,"EA",33],
+  ["Comandante Piedrabuena",74,"EA",19],["Comodoro Rivadavia",29,"EA-FAA",11],
+  ["Concepción del Uruguay",50,"EA",45],["Concordia",23,"EA",51],["Córdoba",1,"EA-FAA",3],
+  ["Coronel Pringles",81,"EA",85],["Corrientes",25,"EA",30],["Covunco",79,"EA",50],
+  ["Crespo",9,"EA",75],["Curuzú Cuatiá",60,"EA",32],["Esquel",43,"EA",22],
+  ["Formosa",18,"EA",17],["Goya",43,"EA",20],["Grl Galarza",78,"EA",80],
+  ["Grl Ordoñez",40,"EA",84],["Grl Pico",36,"EA",73],["Guadalupe",6,"EA",83],
+  ["Gualeguaychú",59,"EA",53],["Jujuy",20,"EA",5],["Junín",45,"EA",77],
+  ["Junín de los Andes",52,"EA",8],["La Plata",56,"EA",76],["La Rioja",9,"EA",29],
+  ["Las Lajas",79,"EA",40],["Magdalena",69,"EA",70],["Mar del Plata",63,"EA-ARA",39],
+  ["Mendoza",1,"EA-FAA",2],["Mercedes (Corrientes)",20,"EA",35],["Monte Caseros",60,"EA",31],
+  ["Neuquén",14,"EA",10],["Olavarría",52,"EA",67],["Paraná",4,"EA-FAA",24],
+  ["Paso de los Libres",60,"EA",38],["Pigüé",36,"EA",74],["Posadas",23,"EA-ARA",7],
+  ["Primeros Pinos",83,"EA",68],["Puente del Inca",85,"EA",48],["Puerto Deseado",66,"EA-ARA",55],
+  ["Puerto Iguazú",31,"EA",36],["Puerto Santa Cruz",66,"EA-ARA",46],["Resistencia",25,"EA",18],
+  ["Río Cuarto",15,"EA",58],["Río Gallegos",29,"EA-ARA-FAA",12],["Río Grande",74,"EA-ARA",82],
+  ["Rio Mayo",68,"EA",57],["Rosario",31,"EA",78],["Rosario del Tala",48,"EA",61],
+  ["Rospentek",77,"EA",26],["Salta",3,"EA",1],["San Antonio de los Cobres",84,"EA",60],
+  ["San Carlos de Bariloche",41,"EA",25],["San Javier",31,"EA",15],["San Juan",9,"EA",42],
+  ["San Lorenzo",31,"EA",79],["San Luis",9,"EA",41],["San Martín de los Andes",50,"EA",16],
+  ["San Nicolás",46,"EA",71],["San Rafael",65,"EA",64],["Santa Fe",6,"EA",43],
+  ["Santa Rosa",36,"EA",56],["Santiago del Estero",15,"EA",63],["Santo Tomé (Corrientes)",20,"EA",72],
+  ["Santo Tomé (Santa Fe)",6,"EA",62],["Tandil",25,"EA-FAA",44],["Tartagal",73,"EA",13],
+  ["Toay",36,"EA",69],["Tucumán",28,"EA",37],["Tupungato",18,"EA",23],
+  ["Ushuaia",76,"EA-ARA-FAA",49],["Uspallata",42,"EA",21],["Villaguay",48,"EA",34],
+  ["Yapeyú",57,"EA",81],["Zapala",69,"EA",28]
+];
+
 // Cantidad fija de Soldados Voluntarios por guarnición (todos grado VP).
 const SOLDADOS_VP_RAW = [
   ["Apóstoles",293],["Arana",191],["Azul",118],["Bahía Blanca",181],["Bernardo de Irigoyen",56],
@@ -261,6 +304,7 @@ let gradoMap = {};          // normGrado(personal) -> normGrado(haberes), overri
 let unmatchedGrados = [];   // [{norm, label, count}]
 let chart = null;
 let pctRenderTimer = null;
+let pctSort = { key:'guarnicion', dir:'asc' };
 
 /* ==================== UTIL ==================== */
 function normalize(s){
@@ -270,9 +314,13 @@ function normalize(s){
 }
 const DEFAULT_PCT = {};
 const CANON_GUARNICION = {};
+const GUARNICION_META = {};
 DEFAULT_PCT_RAW.forEach(([label, pct]) => {
   DEFAULT_PCT[normalize(label)] = pct;
   CANON_GUARNICION[normalize(label)] = label;
+});
+GUARNICION_META_RAW.forEach(([label, rankingEstudio, fuerza, rankingDJ]) => {
+  GUARNICION_META[normalize(label)] = { rankingEstudio, fuerza, rankingDJ };
 });
 // Cualquier guarnición que no esté en la lista de 85 (o que sea "Buenos Aires..." en cualquier variante,
 // esté vacía, diga "a asignar" u otra cosa) se resuelve como CABA.
@@ -515,29 +563,58 @@ function renderPctTable(){
     counts[p.guarnicion][p.tipo] += (p.count || 1);
   }
 
-  let html = '<thead><tr><th>Guarnición</th><th class="num">Of</th><th class="num">Subof</th><th class="num">Sold</th><th class="num">Total</th><th class="num">% efectivo</th><th class="num">% zona</th><th class="num">Gasto guarnición</th></tr></thead><tbody>';
-  for (const g of guarniciones) {
-    const val = pctMatrix[g] || 0;
+  const rows = guarniciones.map(g => {
     const c = counts[g] || { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
     const totalG = c.Oficial + c.Suboficial + c['Soldado Voluntario'];
     const pctEfectivo = totalEfectivo ? totalG / totalEfectivo * 100 : 0;
-    html += `<tr data-g="${escapeAttr(g)}">
-      <td>${g}</td>
-      <td class="num pct-row-of">${c.Oficial.toLocaleString('es-AR')}</td>
-      <td class="num pct-row-subof">${c.Suboficial.toLocaleString('es-AR')}</td>
-      <td class="num pct-row-sold">${c['Soldado Voluntario'].toLocaleString('es-AR')}</td>
-      <td class="num">${totalG.toLocaleString('es-AR')}</td>
-      <td class="num">${pctEfectivo.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td>
-      <td class="num"><input class="pct-input" type="number" step="5" min="0" max="100" data-g="${escapeAttr(g)}" value="${val}"><span class="pct-suffix">%</span></td>
-      <td class="num pct-row-total">${money(totals[g] || 0)}</td>
+    const meta = GUARNICION_META[normalize(g)] || { rankingEstudio:999, fuerza:'', rankingDJ:999 };
+    return { guarnicion:g, rankingEstudio:meta.rankingEstudio, fuerza:meta.fuerza, rankingDJ:meta.rankingDJ,
+      of:c.Oficial, subof:c.Suboficial, sold:c['Soldado Voluntario'], total:totalG,
+      pctEfectivo, pctZona:pctMatrix[g] || 0, gasto:totals[g] || 0 };
+  });
+  rows.sort((a,b) => {
+    const av = a[pctSort.key], bv = b[pctSort.key];
+    const cmp = (typeof av === 'string') ? av.localeCompare(bv,'es') : av - bv;
+    return pctSort.dir === 'asc' ? cmp : -cmp;
+  });
+
+  const sortHeader = (label,key,isNum=false) => {
+    const arrow = pctSort.key === key ? (pctSort.dir === 'asc' ? '▲' : '▼') : '↕';
+    return `<th class="${isNum?'num':''}"><button class="sort-btn" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></button></th>`;
+  };
+  let html = '<thead><tr>' +
+    sortHeader('Guarnición','guarnicion') + sortHeader('Ranking estudio','rankingEstudio',true) +
+    sortHeader('Fuerza','fuerza') + sortHeader('Ranking DJ','rankingDJ',true) +
+    sortHeader('Of','of',true) + sortHeader('Subof','subof',true) + sortHeader('Sold','sold',true) +
+    sortHeader('Total','total',true) + sortHeader('% efectivo','pctEfectivo',true) +
+    sortHeader('% zona','pctZona',true) + sortHeader('Gasto guarnición','gasto',true) +
+    '</tr></thead><tbody>';
+  for (const r of rows) {
+    const forceClass = r.fuerza ? 'force-' + r.fuerza.toLowerCase() : '';
+    html += `<tr class="${forceClass}" data-g="${escapeAttr(r.guarnicion)}">
+      <td>${r.guarnicion}</td><td class="num">${r.rankingEstudio}</td><td>${r.fuerza}</td><td class="num">${r.rankingDJ}</td>
+      <td class="num pct-row-of">${r.of.toLocaleString('es-AR')}</td>
+      <td class="num pct-row-subof">${r.subof.toLocaleString('es-AR')}</td>
+      <td class="num pct-row-sold">${r.sold.toLocaleString('es-AR')}</td>
+      <td class="num">${r.total.toLocaleString('es-AR')}</td>
+      <td class="num">${r.pctEfectivo.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td>
+      <td class="num"><input class="pct-input" type="number" step="5" min="0" max="100" data-g="${escapeAttr(r.guarnicion)}" value="${r.pctZona}"><span class="pct-suffix">%</span></td>
+      <td class="num pct-row-total">${money(r.gasto)}</td>
     </tr>`;
   }
   const grandTotal = personas.reduce((s,p)=>s+p.suplemento,0);
   const totalOf = personas.filter(p=>p.tipo==='Oficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSubof = personas.filter(p=>p.tipo==='Suboficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSold = personas.filter(p=>p.tipo==='Soldado Voluntario').reduce((s,p)=>s+(p.count||1),0);
-  html += `</tbody><tfoot><tr><td>Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
+  html += `</tbody><tfoot><tr><td colspan="4">Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
+
+  document.querySelectorAll('#pctTable .sort-btn').forEach(btn => btn.addEventListener('click', () => {
+    const key = btn.dataset.sort;
+    if (pctSort.key === key) pctSort.dir = pctSort.dir === 'asc' ? 'desc' : 'asc';
+    else { pctSort.key = key; pctSort.dir = 'asc'; }
+    renderPctTable();
+  }));
 
   document.querySelectorAll('.pct-input').forEach(inp => {
     const schedulePctRecalculation = () => {
@@ -758,6 +835,13 @@ document.getElementById('monthSelect').addEventListener('change', (e) => {
 document.getElementById('resetPctBtn').addEventListener('click', () => {
   if (!confirm('¿Restablecer todos los % a cero?')) return;
   for (const g of guarniciones) pctMatrix[g] = 0;
+  savePct();
+  computeAll();
+  renderAll();
+});
+document.getElementById('legalPctBtn').addEventListener('click', () => {
+  if (!confirm('¿Volver a los porcentajes de zona establecidos por ley?')) return;
+  for (const g of guarniciones) pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
   savePct();
   computeAll();
   renderAll();
