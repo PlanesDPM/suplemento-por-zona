@@ -137,6 +137,12 @@
   .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .filters select, .filters input{padding:6px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:.85rem;background:#fff;}
   .filters input[type=text]{min-width:200px;}
+  .matrix-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px;padding:12px;background:#f8f7f2;border:1px solid var(--line);}
+  .matrix-filter{display:flex;flex-direction:column;gap:3px;min-width:150px;}
+  .matrix-filter label{font-size:.74rem;color:var(--ink-soft);font-weight:600;}
+  .matrix-filter select{padding:6px 9px;border:1px solid var(--line);border-radius:var(--radius);font-family:inherit;font-size:.82rem;background:#fff;color:var(--ink);}
+  .matrix-filter-actions{display:flex;align-items:end;}
+  .matrix-filter-count{margin-left:auto;align-self:center;font-size:.78rem;color:var(--ink-soft);}
 
   .table-scroll{max-height:480px;overflow:auto;border:1px solid var(--line);}
   .table-scroll table{margin:0;}
@@ -197,6 +203,14 @@
         <span class="note">Editable — se guarda en este navegador</span>
       </div>
       <div class="panel">
+        <div class="matrix-filters" id="matrixFilters">
+          <div class="matrix-filter"><label for="matrixFilterZona">Zona</label><select id="matrixFilterZona"></select></div>
+          <div class="matrix-filter"><label for="matrixFilterProvincia">Provincia</label><select id="matrixFilterProvincia"></select></div>
+          <div class="matrix-filter"><label for="matrixFilterFuerza">Fuerza</label><select id="matrixFilterFuerza"></select></div>
+          <div class="matrix-filter"><label for="matrixFilterGuarnicion">Guarnición</label><select id="matrixFilterGuarnicion"></select></div>
+          <div class="matrix-filter-actions"><button class="tool-btn" id="clearMatrixFiltersBtn">Limpiar filtros</button></div>
+          <div class="matrix-filter-count" id="matrixFilterCount"></div>
+        </div>
         <div class="matrix-scroll"><table class="pct-table" id="pctTable"></table></div>
         <div class="action-toolbar">
           <button class="btn secondary" id="resetPctBtn">Restablecer todos los % a cero</button>
@@ -391,6 +405,7 @@ let chart = null;
 let pctRenderTimer = null;
 let pctSort = { key:'guarnicion', dir:'asc' };
 let variants = [null,null,null,null];
+let matrixFilters = { zona:'', provincia:'', fuerza:'', guarnicion:'' };
 
 /* ==================== UTIL ==================== */
 function normalize(s){
@@ -678,7 +693,7 @@ function updatePctInputChangeClass(inp, g, currentPct){
   if (cls) inp.classList.add(cls);
 }
 
-function renderPctTable(){
+function allMatrixRows(){
   const totals = {}, counts = {};
   const totalEfectivo = personas.reduce((s,p)=>s+(p.count||1),0);
   for (const p of personas) {
@@ -686,8 +701,7 @@ function renderPctTable(){
     if (!counts[p.guarnicion]) counts[p.guarnicion] = { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
     counts[p.guarnicion][p.tipo] += (p.count || 1);
   }
-
-  const rows = guarniciones.map(g => {
+  return guarniciones.map(g => {
     const c = counts[g] || { Oficial:0, Suboficial:0, 'Soldado Voluntario':0 };
     const totalG = c.Oficial + c.Suboficial + c['Soldado Voluntario'];
     const pctEfectivo = totalEfectivo ? totalG / totalEfectivo * 100 : 0;
@@ -696,6 +710,36 @@ function renderPctTable(){
       of:c.Oficial, subof:c.Suboficial, sold:c['Soldado Voluntario'], total:totalG,
       pctEfectivo, pctZona:pctMatrix[g] || 0, gasto:totals[g] || 0 };
   });
+}
+function matrixRowMatches(r, ignoreKey=''){
+  return (!matrixFilters.zona || ignoreKey==='zona' || r.zona===matrixFilters.zona) &&
+    (!matrixFilters.provincia || ignoreKey==='provincia' || r.provincia===matrixFilters.provincia) &&
+    (!matrixFilters.fuerza || ignoreKey==='fuerza' || r.fuerza===matrixFilters.fuerza) &&
+    (!matrixFilters.guarnicion || ignoreKey==='guarnicion' || r.guarnicion===matrixFilters.guarnicion);
+}
+function renderMatrixFilters(rows){
+  const defs = [
+    ['zona','matrixFilterZona','Todas las zonas'],['provincia','matrixFilterProvincia','Todas las provincias'],
+    ['fuerza','matrixFilterFuerza','Todas las fuerzas'],['guarnicion','matrixFilterGuarnicion','Todas las guarniciones']
+  ];
+  for (const [key,id,allLabel] of defs) {
+    const el=document.getElementById(id); if(!el) continue;
+    const available=rows.filter(r=>matrixRowMatches(r,key));
+    const values=[...new Set(available.map(r=>r[key]).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+    if (matrixFilters[key] && !values.includes(matrixFilters[key])) matrixFilters[key]='';
+    el.innerHTML=`<option value="">${allLabel}</option>`+values.map(v=>`<option value="${escapeAttr(v)}">${v}</option>`).join('');
+    el.value=matrixFilters[key];
+    el.onchange=()=>{ matrixFilters[key]=el.value; renderPctTable(); };
+  }
+  const visible=rows.filter(r=>matrixRowMatches(r));
+  const count=document.getElementById('matrixFilterCount');
+  if(count) count.textContent=`${visible.length} de ${rows.length} guarniciones visibles`;
+}
+
+function renderPctTable(){
+  const allRows = allMatrixRows();
+  renderMatrixFilters(allRows);
+  const rows = allRows.filter(r => matrixRowMatches(r));
   rows.sort((a,b) => {
     const av = a[pctSort.key], bv = b[pctSort.key];
     const cmp = (typeof av === 'string') ? av.localeCompare(bv,'es') : av - bv;
@@ -1072,6 +1116,10 @@ document.getElementById('importVariantsFile').addEventListener('change', async e
   const file = e.target.files && e.target.files[0];
   if (file) await importVariants(file);
   e.target.value = '';
+});
+document.getElementById('clearMatrixFiltersBtn').addEventListener('click', () => {
+  matrixFilters = { zona:'', provincia:'', fuerza:'', guarnicion:'' };
+  renderPctTable();
 });
 document.getElementById('printBtn').addEventListener('click', () => window.print());
 loadAll();
