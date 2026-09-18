@@ -341,6 +341,38 @@
 .proposal-change.down .v{color:#8a352d;}
 </style>
 
+
+<style>
+/* ===== Refrigerio ===== */
+.refrig-toolbar{
+  display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:10px;
+  background:#f7f5ee;border:1px solid var(--line);border-radius:6px;
+}
+.refrig-group{display:flex;flex-direction:column;gap:4px;}
+.refrig-group label{font-size:.70rem;font-weight:600;color:var(--ink-soft);}
+.refrig-toggle{display:inline-flex;border:1px solid #aeb4c2;border-radius:5px;overflow:hidden;background:#fff;}
+.refrig-toggle button{border:0;background:#fff;color:var(--navy);padding:7px 13px;font:600 .76rem Arial,sans-serif;cursor:pointer;}
+.refrig-toggle button.active{background:var(--navy);color:#fff;}
+.refrig-days{width:74px;padding:7px 8px;border:1px solid #aeb4c2;border-radius:5px;font:600 .82rem Arial,sans-serif;}
+.refrig-live{margin-left:auto;text-align:right;min-width:220px;}
+.refrig-live .rl-label{font-size:.68rem;color:var(--ink-soft);}
+.refrig-live .rl-value{font:700 .95rem 'IBM Plex Mono',monospace;color:var(--navy);margin-top:2px;}
+.refrig-live .rl-total{font-size:.70rem;color:var(--ink-soft);margin-top:2px;}
+.refrig-check{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font:600 .72rem Arial,sans-serif;}
+.refrig-check input{width:16px;height:16px;accent-color:var(--navy);}
+.refrig-disabled{opacity:.42;}
+.refrig-summary-row td{background:#f6f3e8!important;font-weight:700!important;}
+.refrig-total-row td{background:#e9edf5!important;color:var(--navy)!important;font-weight:700!important;}
+.proposal-refrig{
+  flex:0 0 auto;margin:7px 9px 0;padding:7px 8px;border:1px solid var(--line);border-radius:5px;background:#faf9f5;
+  font:14px Arial,sans-serif;
+}
+.proposal-refrig-head{display:flex;justify-content:space-between;gap:8px;font-weight:700;color:var(--navy);}
+.proposal-refrig-list{margin-top:4px;line-height:1.25;color:var(--ink-soft);}
+.proposal-refrig-list div{display:flex;justify-content:space-between;gap:8px;}
+.proposal-metric .label{min-height:18px!important;}
+</style>
+
 </head>
 <body>
 
@@ -397,10 +429,10 @@
   <div id="status"></div>
 
   <div class="kpis" id="kpis" style="display:none;">
-    <div class="kpi"><div class="label">Total mensual en suplemento de zona</div><div class="value" id="kpiTotal">—</div></div>
-    <div class="kpi"><div class="label">Diferencia respecto de los porcentajes legales</div><div class="value" id="kpiDiff">—</div></div>
-    <div class="kpi"><div class="label">Personal con suplemento de zona en 0 %</div><div class="value" id="kpiZero">—</div></div>
-    <div class="kpi"><div class="label">Diferencia de personal respecto de valores legales</div><div class="value" id="kpiZeroDiff">—</div></div>
+    <div class="kpi"><div class="label">Total Mensual</div><div class="value" id="kpiTotal">—</div></div>
+    <div class="kpi"><div class="label">Diferencia con Ajustes</div><div class="value" id="kpiDiff">—</div></div>
+    <div class="kpi"><div class="label">Personal en zona 0%</div><div class="value" id="kpiZero">—</div></div>
+    <div class="kpi"><div class="label">Diferencia con Ajustes</div><div class="value" id="kpiZeroDiff">—</div></div>
   </div>
 
   <section class="two-col" id="mainGrid" style="display:none;">
@@ -410,6 +442,26 @@
         <span class="note">Editable — se guarda en este navegador</span>
       </div>
       <div class="panel">
+
+        <div class="refrig-toolbar" id="refrigToolbar">
+          <div class="refrig-group">
+            <label>Refrigerio</label>
+            <div class="refrig-toggle">
+              <button type="button" id="refrigYesBtn">Refrigerio SI</button>
+              <button type="button" id="refrigNoBtn">Refrigerio NO</button>
+            </div>
+          </div>
+          <div class="refrig-group">
+            <label for="refrigDays">Días de refrigerio</label>
+            <input class="refrig-days" id="refrigDays" type="number" min="0" max="31" step="1" value="23">
+          </div>
+          <div class="refrig-live">
+            <div class="rl-label">Total mensual Refrigerio</div>
+            <div class="rl-value" id="refrigLiveTotal">$ 0</div>
+            <div class="rl-total" id="refrigLiveCombined">Zona + Refrigerio: $ 0</div>
+          </div>
+        </div>
+
         <div class="matrix-filters" id="matrixFilters">
           <div class="matrix-filter"><label for="matrixFilterZona">Zona</label><select id="matrixFilterZona"></select></div>
           <div class="matrix-filter"><label for="matrixFilterProvincia">Provincia</label><select id="matrixFilterProvincia"></select></div>
@@ -473,6 +525,7 @@ const GRADO_SOLDADO = 'Voluntario de Primera (VP)';
 const LS_PCT = 'ezz_pct_matrix_v2';
 const LS_MAP = 'ezz_grado_map_v1';
 const LS_VARIANTS = 'ezz_pct_variants_v1';
+const LS_REFRIG = 'ezz_refrigerio_v1';
 
 // Haberes básicos mensuales 2026. Fuente: tabla suministrada para esta herramienta.
 // Diciembre 2025 fue excluido. SI febrero fue corregido a $1.037.778.
@@ -625,6 +678,9 @@ let pctRenderTimer = null;
 let pctSort = { key:'guarnicion', dir:'asc' };
 let variants = [null,null,null,null];
 let matrixFilters = { zona:'', provincia:'', fuerza:'', guarnicion:'' };
+let refrigerioEnabled = false;
+let refrigerioDays = 23;
+let refrigerioGuarniciones = {};
 
 /* ==================== UTIL ==================== */
 function normalize(s){
@@ -771,18 +827,24 @@ document.getElementById('proModalClose').addEventListener('click',()=>closeProMo
 document.getElementById('proModalBackdrop').addEventListener('click',e=>{if(e.target.id==='proModalBackdrop')closeProModal(false);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('proModalBackdrop').classList.contains('show'))closeProModal(false);});
 
-function metricsForPcts(pcts){
-  let total=0,legalTotal=0,zero=0,zeroLegal=0;
+function metricsForPcts(pcts, variant=null){
+  let zoneTotal=0,legalTotal=0,zero=0,zeroLegal=0;
   for(const p of personas){
     const legal=DEFAULT_PCT[normalize(p.guarnicion)]||0;
     const current=normalizePct(pcts[p.guarnicion]!==undefined?pcts[p.guarnicion]:legal);
     const count=p.count||1, haber=p.haber||0;
-    total += haber*current/100*count;
+    zoneTotal += haber*current/100*count;
     legalTotal += haber*legal/100*count;
     if(current===0) zero+=count;
     if(legal===0) zeroLegal+=count;
   }
-  return {total,legalTotal,diff:total-legalTotal,zero,zeroLegal,zeroDiff:zero-zeroLegal};
+  const enabled=variant?.refrigerioEnabled??false;
+  const days=variant?.refrigerioDays??23;
+  const selected=variant?.refrigerioGuarniciones||{};
+  const refrig=refrigerioMetrics(pcts,enabled,days,selected);
+  const total=zoneTotal+refrig.total;
+  return {total,zoneTotal,refrigerioTotal:refrig.total,refrigerioPeople:refrig.people,refrigerioDetail:refrig.detail,
+    refrigerioEnabled:enabled,refrigerioDays:days,legalTotal,diff:total-legalTotal,zero,zeroLegal,zeroDiff:zero-zeroLegal};
 }
 function signedMoney(n){return (n>0?'+':n<0?'−':'')+money(Math.abs(n));}
 function signedPeople(n){return (n>0?'+':n<0?'−':'')+Math.abs(n).toLocaleString('es-AR');}
@@ -819,7 +881,7 @@ function openVariantModal(slot){
   if(!variant){
     openProModal({title:`VARIANTE ${slot+1}`,body:`${moveActions}<div class="pro-message" style="margin-top:16px;">Este espacio todavía no tiene una variante guardada.</div>`,
       actions:[{label:'Cerrar',className:'btn secondary',value:false},{label:'Guardar valores actuales',className:'btn',onClick:()=>{
-        variants[slot]={pcts:{...pctMatrix},savedAt:new Date().toISOString()};saveVariants();closeProModal(true);renderVariants();
+        variants[slot]={pcts:{...pctMatrix},refrigerioEnabled,refrigerioDays,refrigerioGuarniciones:{...refrigerioGuarniciones},savedAt:new Date().toISOString()};saveVariants();closeProModal(true);renderVariants();
       }}]});
     setTimeout(()=>{
       document.getElementById('moveVariantLeft')?.addEventListener('click',()=>moveVariant(slot,-1));
@@ -827,7 +889,7 @@ function openVariantModal(slot){
     },0);
     return;
   }
-  const m=metricsForPcts(variant.pcts), changes=variantChanges(variant.pcts);
+  const m=metricsForPcts(variant.pcts,variant), changes=variantChanges(variant.pcts);
   const rows=changes.length?changes.map(x=>`<div class="variant-detail-row"><span>${x}</span></div>`).join(''):
     `<div class="pro-message">Sin cambios respecto de los porcentajes legales.</div>`;
   openProModal({title:`VARIANTE ${slot+1}`,body:`
@@ -835,19 +897,68 @@ function openVariantModal(slot){
     <div class="variant-metrics" style="margin-top:16px;">
       <div class="variant-metric"><div class="vm-label">Diferencia mensual respecto de valores legales</div><div class="vm-value">${signedMoney(m.diff)}</div></div>
       <div class="variant-metric"><div class="vm-label">Diferencia de personal sin suplemento</div><div class="vm-value">${signedPeople(m.zeroDiff)} personas</div></div>
-      <div class="variant-metric"><div class="vm-label">Gasto mensual de la variante</div><div class="vm-value">${money(m.total)}</div></div>
+      <div class="variant-metric"><div class="vm-label">Gasto total Zona + Refrigerio</div><div class="vm-value">${money(m.total)}</div></div>
+      <div class="variant-metric"><div class="vm-label">Total mensual Refrigerio</div><div class="vm-value">${money(m.refrigerioTotal)}</div></div>
       <div class="variant-metric"><div class="vm-label">Personal con suplemento 0 %</div><div class="vm-value">${m.zero.toLocaleString('es-AR')} personas</div></div>
     </div>
     <div class="variant-detail">${rows}</div>`,
     actions:[
       {label:'Eliminar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Eliminar VARIANTE ${slot+1}`,'La variante guardada será eliminada.','Eliminar')){variants[slot]=null;saveVariants();renderVariants();}}},
-      {label:'Actualizar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Actualizar VARIANTE ${slot+1}`,'Se reemplazarán sus valores por los porcentajes actualmente visibles.','Actualizar')){variants[slot]={pcts:{...pctMatrix},savedAt:new Date().toISOString()};saveVariants();renderVariants();}}},
-      {label:'Aplicar variante',className:'btn',onClick:()=>{for(const g of guarniciones){const legal=DEFAULT_PCT[normalize(g)]??0;pctMatrix[g]=normalizePct(variant.pcts[g]!==undefined?variant.pcts[g]:legal);}savePct();computeAll();closeProModal(true);renderAll();}}
+      {label:'Actualizar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Actualizar VARIANTE ${slot+1}`,'Se reemplazarán sus valores por los porcentajes actualmente visibles.','Actualizar')){variants[slot]={pcts:{...pctMatrix},refrigerioEnabled,refrigerioDays,refrigerioGuarniciones:{...refrigerioGuarniciones},savedAt:new Date().toISOString()};saveVariants();renderVariants();}}},
+      {label:'Aplicar variante',className:'btn',onClick:()=>{for(const g of guarniciones){const legal=DEFAULT_PCT[normalize(g)]??0;pctMatrix[g]=normalizePct(variant.pcts[g]!==undefined?variant.pcts[g]:legal);}
+        refrigerioEnabled=!!variant.refrigerioEnabled;refrigerioDays=Math.max(0,Math.min(31,parseInt(variant.refrigerioDays??23,10)||0));
+        refrigerioGuarniciones={...(variant.refrigerioGuarniciones||{})};savePct();saveRefrigerio();computeAll();closeProModal(true);renderAll();updateRefrigerioUI();}}
     ]});
   setTimeout(()=>{
     document.getElementById('moveVariantLeft')?.addEventListener('click',()=>moveVariant(slot,-1));
     document.getElementById('moveVariantRight')?.addEventListener('click',()=>moveVariant(slot,1));
   },0);
+}
+
+
+/* ==================== REFRIGERIO ==================== */
+function tgHaberActual(){
+  const info=haberesMap['TG'];
+  if(info && info.valuesByHeader && info.valuesByHeader[selectedMonth]!==undefined) return Number(info.valuesByHeader[selectedMonth])||0;
+  const idx=MONTH_HEADERS.indexOf(selectedMonth);
+  return idx>=0 ? (HABERES_2026.TG[idx]||0) : 0;
+}
+function refrigerioUnitario(days=refrigerioDays){
+  return tgHaberActual()*0.0035*Math.max(0,Number(days)||0);
+}
+function personalCountGuarnicion(g){
+  return personas.filter(p=>p.guarnicion===g).reduce((s,p)=>s+(p.count||1),0);
+}
+function refrigerioMetrics(pcts=pctMatrix, enabled=refrigerioEnabled, days=refrigerioDays, selected=refrigerioGuarniciones){
+  let total=0, people=0; const detail=[];
+  if(!enabled) return {total,people,detail,unit:refrigerioUnitario(days)};
+  const unit=refrigerioUnitario(days);
+  for(const g of guarniciones){
+    const pct=normalizePct(pcts[g]!==undefined?pcts[g]:(DEFAULT_PCT[normalize(g)]||0));
+    if(pct!==0 || !selected[g]) continue;
+    const count=personalCountGuarnicion(g);
+    if(!count) continue;
+    const cost=unit*count;
+    people+=count; total+=cost; detail.push({g,count,cost});
+  }
+  return {total,people,detail,unit};
+}
+function saveRefrigerio(){
+  localStorage.setItem(LS_REFRIG,JSON.stringify({enabled:refrigerioEnabled,days:refrigerioDays,selected:refrigerioGuarniciones}));
+}
+function updateRefrigerioUI(){
+  const yes=document.getElementById('refrigYesBtn'), no=document.getElementById('refrigNoBtn'), days=document.getElementById('refrigDays');
+  if(yes) yes.classList.toggle('active',refrigerioEnabled);
+  if(no) no.classList.toggle('active',!refrigerioEnabled);
+  if(days){days.value=refrigerioDays;days.disabled=!refrigerioEnabled;}
+  const r=refrigerioMetrics();
+  const zone=personas.reduce((s,p)=>s+(p.suplemento||0),0);
+  const a=document.getElementById('refrigLiveTotal'),b=document.getElementById('refrigLiveCombined');
+  if(a)a.textContent=money(r.total);
+  if(b)b.textContent=`Zona + Refrigerio: ${money(zone+r.total)}`;
+}
+function refreshAfterRefrigerio(){
+  saveRefrigerio(); updateRefrigerioUI(); renderPctTable(); renderKPIs(); renderVariants();
 }
 
 /* ==================== LOAD ==================== */
@@ -934,8 +1045,12 @@ function loadLocalState(){
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
     const savedVariants = JSON.parse(localStorage.getItem(LS_VARIANTS) || '[]');
     variants = Array.from({length:4},(_,i)=>savedVariants[i] || null);
+    const savedRefrig=JSON.parse(localStorage.getItem(LS_REFRIG)||'{}');
+    refrigerioEnabled=!!savedRefrig.enabled;
+    refrigerioDays=Math.max(0,Math.min(31,parseInt(savedRefrig.days??23,10)||0));
+    refrigerioGuarniciones=savedRefrig.selected && typeof savedRefrig.selected==='object' ? savedRefrig.selected : {};
   } catch(e) {
-    pctMatrix = {}; gradoMap = {}; variants = [null,null,null,null];
+    pctMatrix = {}; gradoMap = {}; variants = [null,null,null,null]; refrigerioEnabled=false; refrigerioDays=23; refrigerioGuarniciones={};
     for (const g of guarniciones) pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
   }
 }
@@ -996,6 +1111,7 @@ function renderAll(){
   renderPctTable();
   renderGuarnicionChartAndTable();
   renderVariants();
+  updateRefrigerioUI();
 
   document.getElementById('kpis').style.display = '';
   document.getElementById('mainGrid').style.display = '';
@@ -1003,7 +1119,9 @@ function renderAll(){
 
 /* ==================== RENDER: KPIs ==================== */
 function renderKPIs(){
-  const total = personas.reduce((s,p) => s + p.suplemento, 0);
+  const zoneTotal = personas.reduce((s,p) => s + p.suplemento, 0);
+  const refrig = refrigerioMetrics();
+  const total = zoneTotal + refrig.total;
   const legalTotal = personas.reduce((s,p) => {
     const legalPct = DEFAULT_PCT[normalize(p.guarnicion)] || 0;
     return s + (p.haber || 0) * legalPct / 100 * (p.count || 1);
@@ -1107,7 +1225,7 @@ function renderPctTable(){
     sortHeader('Fuerza','fuerza') + sortHeader('Ranking DJ','rankingDJ',true) +
     sortHeader('Of','of',true) + sortHeader('Subof','subof',true) + sortHeader('Sold','sold',true) +
     sortHeader('Total','total',true) + sortHeader('% efectivo','pctEfectivo',true) +
-    sortHeader('% zona','pctZona',true) + sortHeader('Gasto guarnición','gasto',true) +
+    sortHeader('% zona','pctZona',true) + '<th>Refrigerio</th>' + sortHeader('Gasto guarnición','gasto',true) +
     '</tr></thead><tbody>';
   for (const r of rows) {
     const forceClass = r.fuerza && r.fuerza !== 'EA' ? 'force-' + r.fuerza.toLowerCase() : '';
@@ -1119,6 +1237,7 @@ function renderPctTable(){
       <td class="num">${r.total.toLocaleString('es-AR')}</td>
       <td class="num">${r.pctEfectivo.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td>
       <td class="num"><span class="pct-control"><input class="pct-input ${pctChangeClass(r.guarnicion,r.pctZona)}" type="number" step="5" min="0" max="100" data-g="${escapeAttr(r.guarnicion)}" value="${r.pctZona}"><span class="pct-suffix">%</span><button class="legal-row-btn" data-legal-g="${escapeAttr(r.guarnicion)}" title="Volver al porcentaje legal de ${escapeAttr(r.guarnicion)}">↺</button></span></td>
+      <td><label class="refrig-check ${(!refrigerioEnabled||r.pctZona!==0)?'refrig-disabled':''}"><input class="refrig-row-check" type="checkbox" data-g="${escapeAttr(r.guarnicion)}" ${refrigerioGuarniciones[r.guarnicion]?'checked':''} ${(!refrigerioEnabled||r.pctZona!==0)?'disabled':''}> SI</label></td>
       <td class="num pct-row-total">${money(r.gasto)}</td>
     </tr>`;
   }
@@ -1127,7 +1246,12 @@ function renderPctTable(){
   const totalOf = personas.filter(p=>p.tipo==='Oficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSubof = personas.filter(p=>p.tipo==='Suboficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSold = personas.filter(p=>p.tipo==='Soldado Voluntario').reduce((s,p)=>s+(p.count||1),0);
-  html += `</tbody><tfoot><tr><td colspan="6">Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
+  const refrigNow=refrigerioMetrics();
+  html += `</tbody><tfoot>
+    <tr><td colspan="6">Gasto de Zona</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr>
+    <tr class="refrig-summary-row"><td colspan="13">Total Mensual Refrigerio · ${refrigerioEnabled?'SI':'NO'} · ${refrigerioDays} días · ${refrigNow.people.toLocaleString('es-AR')} personas</td><td class="num">${money(refrigNow.total)}</td></tr>
+    <tr class="refrig-total-row"><td colspan="13">GASTO TOTAL · ZONA + REFRIGERIO</td><td class="num">${money(grandTotal+refrigNow.total)}</td></tr>
+  </tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
   document.querySelectorAll('#pctTable .sort-btn').forEach(btn => btn.addEventListener('click', () => {
@@ -1159,6 +1283,10 @@ function renderPctTable(){
     inp.addEventListener('input', schedulePctRecalculation);
     inp.addEventListener('change', schedulePctRecalculation);
   });
+  document.querySelectorAll('#pctTable .refrig-row-check').forEach(chk=>chk.addEventListener('change',()=>{
+    refrigerioGuarniciones[chk.dataset.g]=chk.checked;
+    refreshAfterRefrigerio();
+  }));
   document.querySelectorAll('#pctTable .legal-row-btn').forEach(btn => btn.addEventListener('click', () => {
     const g = btn.dataset.legalG;
     pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
@@ -1433,6 +1561,13 @@ document.getElementById('importVariantsFile').addEventListener('change', async e
   if (file) await importVariants(file);
   e.target.value = '';
 });
+
+document.getElementById('refrigYesBtn').addEventListener('click',()=>{refrigerioEnabled=true;refreshAfterRefrigerio();});
+document.getElementById('refrigNoBtn').addEventListener('click',()=>{refrigerioEnabled=false;refreshAfterRefrigerio();});
+document.getElementById('refrigDays').addEventListener('change',e=>{
+  refrigerioDays=Math.max(0,Math.min(31,parseInt(e.target.value,10)||0));refreshAfterRefrigerio();
+});
+
 document.getElementById('clearMatrixFiltersBtn').addEventListener('click', () => {
   matrixFilters = { zona:'', provincia:'', fuerza:'', guarnicion:'' };
   renderPctTable();
@@ -1460,7 +1595,7 @@ function renderProposals(){
     return;
   }
   body.innerHTML=saved.map(({variant,index},position)=>{
-    const m=metricsForPcts(variant.pcts);
+    const m=metricsForPcts(variant.pcts,variant);
     const changes=proposalChangeObjects(variant.pcts);
     const maxRows=saved.length<=2?16:saved.length===3?13:10;
     const ups=changes.filter(c=>c.current>c.legal);
@@ -1489,10 +1624,18 @@ function renderProposals(){
     return `<article class="proposal-card">
       <div class="proposal-head"><h3>VARIANTE ${index+1}</h3><span class="proposal-rank">Posición ${position+1}</span></div>
       <div class="proposal-metrics">
-        <div class="proposal-metric"><div class="label">Diferencia mensual</div><div class="value">${signedMoney(m.diff)}</div></div>
-        <div class="proposal-metric"><div class="label">Diferencia personas sin suplemento</div><div class="value">${signedPeople(m.zeroDiff)}</div></div>
-        <div class="proposal-metric"><div class="label">Gasto mensual</div><div class="value">${money(m.total)}</div></div>
-        <div class="proposal-metric"><div class="label">Personal con 0 %</div><div class="value">${m.zero.toLocaleString('es-AR')}</div></div>
+        <div class="proposal-metric"><div class="label">Total Mensual</div><div class="value">${money(m.total)}</div></div>
+        <div class="proposal-metric"><div class="label">Diferencia con Ajustes</div><div class="value">${signedMoney(m.diff)}</div></div>
+        <div class="proposal-metric"><div class="label">Personal en zona 0%</div><div class="value">${m.zero.toLocaleString('es-AR')}</div></div>
+        <div class="proposal-metric"><div class="label">Diferencia con Ajustes</div><div class="value">${signedPeople(m.zeroDiff)}</div></div>
+      </div>
+      <div class="proposal-refrig">
+        <div class="proposal-refrig-head"><span>Refrigerio ${m.refrigerioEnabled?'SI':'NO'} · ${m.refrigerioDays} días</span><span>${money(m.refrigerioTotal)}</span></div>
+        <div class="proposal-refrig-list">${m.refrigerioEnabled && m.refrigerioDetail.length
+          ? m.refrigerioDetail.slice(0,4).map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost)}</span></div>`).join('')+
+            (m.refrigerioDetail.length>4?`<div><span>+ ${m.refrigerioDetail.length-4} guarniciones</span><span></span></div>`:'')
+          : '<div><span>Sin gasto de refrigerio</span><span></span></div>'}</div>
+        <div class="proposal-refrig-head" style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line);"><span>Zona + Refrigerio</span><span>${money(m.total)}</span></div>
       </div>
       <div class="proposal-changes">
         <div class="proposal-changes-title">Cambios de porcentaje (${changes.length})</div>
