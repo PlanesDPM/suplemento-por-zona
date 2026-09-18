@@ -206,6 +206,29 @@
   @media(max-width:600px){.variant-metrics{grid-template-columns:1fr}.loading-card{padding:28px 22px}.loading-logo{width:120px;height:120px}}
 
 </style>
+
+<style>
+/* Ajuste final: variantes compactas y reordenables manualmente */
+.variants-grid{gap:6px!important;}
+.variant-card{display:inline-flex!important;}
+.variant-main{
+  min-width:92px!important;width:auto!important;height:32px!important;
+  padding:0 12px!important;border-radius:16px!important;
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  background:linear-gradient(135deg,var(--navy),var(--navy-2))!important;
+  color:#fff!important;border:1px solid #35466e!important;
+  box-shadow:0 2px 6px rgba(24,34,65,.14)!important;
+}
+.variant-main:hover{transform:translateY(-1px)!important;box-shadow:0 3px 9px rgba(24,34,65,.20)!important;}
+.variant-main strong{font-size:.72rem!important;letter-spacing:.025em!important;white-space:nowrap!important;}
+.variant-main span{display:none!important;}
+.variant-main.empty{
+  background:#f4f2eb!important;color:#596174!important;border-color:#c9c5b7!important;box-shadow:none!important;
+}
+.variant-order-actions{display:flex;gap:8px;margin-right:auto;}
+.variant-order-actions .btn.secondary{font-size:.78rem;padding:7px 10px;}
+</style>
+
 </head>
 <body>
 
@@ -646,20 +669,42 @@ function variantHeatStyles(){
   });
   return styles;
 }
+function moveVariant(slot, direction){
+  const target=slot+direction;
+  if(target<0 || target>=variants.length) return;
+  const temp=variants[slot];
+  variants[slot]=variants[target];
+  variants[target]=temp;
+  saveVariants();
+  renderVariants();
+  closeProModal(false);
+  openVariantModal(target);
+}
 function openVariantModal(slot){
   const variant=variants[slot];
+  const moveActions = `
+    <div class="variant-order-actions">
+      <button class="btn secondary" id="moveVariantLeft" ${slot===0?'disabled':''}>← Mover a la izquierda</button>
+      <button class="btn secondary" id="moveVariantRight" ${slot===variants.length-1?'disabled':''}>Mover a la derecha →</button>
+    </div>`;
+
   if(!variant){
-    openProModal({title:`VARIANTE ${slot+1}`,body:`<div class="pro-message">Este espacio todavía no tiene una variante guardada.</div>`,
+    openProModal({title:`VARIANTE ${slot+1}`,body:`${moveActions}<div class="pro-message" style="margin-top:16px;">Este espacio todavía no tiene una variante guardada.</div>`,
       actions:[{label:'Cerrar',className:'btn secondary',value:false},{label:'Guardar valores actuales',className:'btn',onClick:()=>{
         variants[slot]={pcts:{...pctMatrix},savedAt:new Date().toISOString()};saveVariants();closeProModal(true);renderVariants();
       }}]});
+    setTimeout(()=>{
+      document.getElementById('moveVariantLeft')?.addEventListener('click',()=>moveVariant(slot,-1));
+      document.getElementById('moveVariantRight')?.addEventListener('click',()=>moveVariant(slot,1));
+    },0);
     return;
   }
   const m=metricsForPcts(variant.pcts), changes=variantChanges(variant.pcts);
   const rows=changes.length?changes.map(x=>`<div class="variant-detail-row"><span>${x}</span></div>`).join(''):
     `<div class="pro-message">Sin cambios respecto de los porcentajes legales.</div>`;
   openProModal({title:`VARIANTE ${slot+1}`,body:`
-    <div class="variant-metrics">
+    ${moveActions}
+    <div class="variant-metrics" style="margin-top:16px;">
       <div class="variant-metric"><div class="vm-label">Diferencia mensual respecto de valores legales</div><div class="vm-value">${signedMoney(m.diff)}</div></div>
       <div class="variant-metric"><div class="vm-label">Diferencia de personal sin suplemento</div><div class="vm-value">${signedPeople(m.zeroDiff)} personas</div></div>
       <div class="variant-metric"><div class="vm-label">Gasto mensual de la variante</div><div class="vm-value">${money(m.total)}</div></div>
@@ -671,6 +716,10 @@ function openVariantModal(slot){
       {label:'Actualizar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Actualizar VARIANTE ${slot+1}`,'Se reemplazarán sus valores por los porcentajes actualmente visibles.','Actualizar')){variants[slot]={pcts:{...pctMatrix},savedAt:new Date().toISOString()};saveVariants();renderVariants();}}},
       {label:'Aplicar variante',className:'btn',onClick:()=>{for(const g of guarniciones){const legal=DEFAULT_PCT[normalize(g)]??0;pctMatrix[g]=normalizePct(variant.pcts[g]!==undefined?variant.pcts[g]:legal);}savePct();computeAll();closeProModal(true);renderAll();}}
     ]});
+  setTimeout(()=>{
+    document.getElementById('moveVariantLeft')?.addEventListener('click',()=>moveVariant(slot,-1));
+    document.getElementById('moveVariantRight')?.addEventListener('click',()=>moveVariant(slot,1));
+  },0);
 }
 
 /* ==================== LOAD ==================== */
@@ -1013,19 +1062,15 @@ function variantChanges(pcts){
 }
 function renderVariants(){
   const grid=document.getElementById('variantsGrid');
-  const heat=variantHeatStyles();
   grid.innerHTML=variants.map((variant,index)=>{
-    if(!variant) return `<div class="variant-card"><button class="variant-main empty" data-slot="${index}"><strong>VARIANTE ${index+1}</strong><span>Sin guardar</span></button></div>`;
-    const m=metricsForPcts(variant.pcts);
-    const bg=heat[index]||'#f5f3ed';
-    const fg=(m.zero>0 && bg.includes('52%'))?'#fff':'#3b2a12';
-    return `<div class="variant-card"><button class="variant-main" data-slot="${index}" style="background:${bg};color:${fg};border-color:rgba(133,78,15,.32);box-shadow:0 2px 8px rgba(139,80,13,.16)">
-      <strong>VARIANTE ${index+1}</strong><span>${m.zero.toLocaleString('es-AR')} sin suplemento · ${signedMoney(m.diff)}</span>
-    </button></div>`;
+    return `<div class="variant-card">
+      <button class="variant-main ${variant?'':'empty'}" data-slot="${index}">
+        <strong>VARIANTE ${index+1}</strong>
+      </button>
+    </div>`;
   }).join('');
   grid.querySelectorAll('.variant-main').forEach(btn=>btn.addEventListener('click',()=>openVariantModal(Number(btn.dataset.slot))));
 }
-
 
 /* ==================== RENDER: gráfico por guarnición ==================== */
 function renderGuarnicionChartAndTable(){
