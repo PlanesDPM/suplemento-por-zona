@@ -1375,15 +1375,42 @@ function renderPctTable(){
       clearTimeout(pctRenderTimer);
       pctRenderTimer = setTimeout(() => {
         const v = normalizePct(inp.value.replace(',', '.'));
+        const previous = normalizePct(pctMatrix[g] !== undefined ? pctMatrix[g] : (DEFAULT_PCT[normalize(g)] || 0));
         inp.value = v;
         updatePctInputChangeClass(inp, g, v);
         pctMatrix[g] = v;
+
+        // Si sale de Zona 0%, deja de ser elegible para Refrigerio.
+        if(previous === 0 && v !== 0 && refrigerioGuarniciones[g]){
+          delete refrigerioGuarniciones[g];
+        }
+
         savePct();
+        saveRefrigerio();
         computeAll();
-        // El recálculo se ejecuta una sola vez cuando termina la secuencia de pulsaciones.
+
+        // Actualización inmediata del desplegable y de todos los importes.
+        renderRefrigerioSelector();
+        updateRefrigerioUI();
         renderKPIs();
         renderGuarnicionChartAndTable();
         updatePctTableTotalsInPlace();
+        renderVariants();
+
+        // Aviso profesional solamente cuando efectivamente entra o sale de Zona 0%.
+        if(previous !== 0 && v === 0){
+          proMessage(
+            'Guarnición incorporada a Zona 0%',
+            `<strong>${g}</strong> quedó establecida en <strong>0%</strong>.<br><br>
+             El menú de <strong>Refrigerio</strong> fue actualizado y la guarnición ya está disponible para seleccionarla.`
+          );
+        }else if(previous === 0 && v !== 0){
+          proMessage(
+            'Guarnición retirada de Zona 0%',
+            `<strong>${g}</strong> dejó de estar en <strong>0%</strong>.<br><br>
+             El menú de <strong>Refrigerio</strong> fue actualizado y la guarnición dejó de estar disponible. Si estaba seleccionada, fue retirada automáticamente del cálculo.`
+          );
+        }
       }, 220);
     };
     inp.addEventListener('input', schedulePctRecalculation);
@@ -1391,8 +1418,16 @@ function renderPctTable(){
   });
   document.querySelectorAll('#pctTable .legal-row-btn').forEach(btn => btn.addEventListener('click', () => {
     const g = btn.dataset.legalG;
-    pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
-    savePct(); computeAll(); renderAll();
+    const previous = normalizePct(pctMatrix[g] !== undefined ? pctMatrix[g] : (DEFAULT_PCT[normalize(g)] || 0));
+    const legal = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
+    pctMatrix[g] = legal;
+    if(previous === 0 && legal !== 0 && refrigerioGuarniciones[g]) delete refrigerioGuarniciones[g];
+    savePct(); saveRefrigerio(); computeAll(); renderAll(); updateRefrigerioUI();
+    if(previous !== 0 && legal === 0){
+      proMessage('Guarnición incorporada a Zona 0%', `<strong>${g}</strong> quedó en <strong>0%</strong> y ya está disponible en el menú de <strong>Refrigerio</strong>.`);
+    }else if(previous === 0 && legal !== 0){
+      proMessage('Guarnición retirada de Zona 0%', `<strong>${g}</strong> dejó de estar en <strong>0%</strong>. El menú de <strong>Refrigerio</strong> fue actualizado automáticamente.`);
+    }
   }));
 }
 function updatePctTableTotalsInPlace(){
