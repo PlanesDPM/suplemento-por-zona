@@ -295,6 +295,38 @@
 }
 </style>
 
+
+<style>
+/* Ajuste solicitado: propuestas con Arial mínimo 14 px */
+#proposalsView, #proposalsView *{font-family:Arial,sans-serif!important;}
+#proposalsView{font-size:14px!important;}
+.proposals-title h2{font-size:20px!important;}
+.proposals-title div{font-size:14px!important;}
+.proposals-body{grid-template-columns:repeat(var(--proposal-count,4),minmax(0,1fr))!important;}
+.proposal-head h3{font-size:16px!important;}
+.proposal-rank{font-size:14px!important;}
+.proposal-metric .label{font-size:14px!important;min-height:34px!important;}
+.proposal-metric .value{font-family:Arial,sans-serif!important;font-size:15px!important;}
+.proposal-changes-title{font-size:14px!important;}
+.proposal-list{font-size:14px!important;line-height:1.25!important;}
+.proposal-change .v{font-family:Arial,sans-serif!important;font-size:14px!important;}
+.proposal-empty,.proposal-more{font-size:14px!important;}
+@media(max-width:1200px){
+  .proposals-body{padding:9px!important;gap:7px!important;}
+  .proposal-metric{padding:6px!important;}
+  .proposal-change{padding:2px 0!important;}
+}
+@media print{
+  @page{size:landscape;margin:8mm;}
+  body > *:not(#proposalsView){display:none!important;}
+  #proposalsView{display:flex!important;position:fixed!important;inset:0!important;width:100%!important;height:100%!important;background:#fff!important;}
+  #proposalsView .proposals-actions{display:none!important;}
+  .proposals-top{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .proposals-body{padding:8px!important;gap:7px!important;}
+  .proposal-card{box-shadow:none!important;break-inside:avoid!important;}
+}
+</style>
+
 </head>
 <body>
 
@@ -306,6 +338,7 @@
       <div id="proposalsMonth">Comparación de las cuatro variantes</div>
     </div>
     <div class="proposals-actions">
+      <button class="btn secondary" id="printProposalsBtn">Imprimir propuestas</button>
       <button class="btn secondary" id="closeProposalsBtn">Volver al estudio</button>
     </div>
   </div>
@@ -1403,17 +1436,19 @@ function proposalChangeObjects(pcts){
 }
 function renderProposals(){
   const body=document.getElementById('proposalsBody');
-  document.getElementById('proposalsMonth').textContent=`${(selectedMonth||'').toUpperCase()} 2026 · comparación simultánea de las cuatro variantes`;
-  body.innerHTML=variants.map((variant,index)=>{
-    if(!variant){
-      return `<article class="proposal-card empty">
-        <div class="proposal-head"><h3>VARIANTE ${index+1}</h3><span class="proposal-rank">Posición ${index+1}</span></div>
-        <div class="proposal-empty">Sin propuesta guardada</div>
-      </article>`;
-    }
+  const saved=variants.map((variant,index)=>({variant,index})).filter(x=>!!x.variant);
+  document.getElementById('proposalsMonth').textContent=`${(selectedMonth||'').toUpperCase()} 2026 · comparación simultánea de ${saved.length} ${saved.length===1?'propuesta':'propuestas'}`;
+  body.style.setProperty('--proposal-count',Math.max(1,saved.length));
+  if(!saved.length){
+    body.innerHTML=`<article class="proposal-card empty" style="grid-column:1/-1;">
+      <div class="proposal-empty">No hay propuestas guardadas para mostrar.</div>
+    </article>`;
+    return;
+  }
+  body.innerHTML=saved.map(({variant,index},position)=>{
     const m=metricsForPcts(variant.pcts);
     const changes=proposalChangeObjects(variant.pcts);
-    const maxRows=13;
+    const maxRows=saved.length<=2?16:saved.length===3?13:10;
     const visible=changes.slice(0,maxRows);
     const list=visible.length?visible.map(c=>`<div class="proposal-change">
       <span class="g" title="${escapeAttr(c.g)}">${c.g}</span>
@@ -1421,7 +1456,7 @@ function renderProposals(){
     </div>`).join(''):`<div class="proposal-empty">Sin cambios respecto de los valores legales</div>`;
     const more=changes.length>maxRows?`<div class="proposal-more">+ ${changes.length-maxRows} modificaciones adicionales</div>`:'';
     return `<article class="proposal-card">
-      <div class="proposal-head"><h3>VARIANTE ${index+1}</h3><span class="proposal-rank">Posición ${index+1}</span></div>
+      <div class="proposal-head"><h3>VARIANTE ${index+1}</h3><span class="proposal-rank">Posición ${position+1}</span></div>
       <div class="proposal-metrics">
         <div class="proposal-metric"><div class="label">Diferencia mensual</div><div class="value">${signedMoney(m.diff)}</div></div>
         <div class="proposal-metric"><div class="label">Diferencia personas sin suplemento</div><div class="value">${signedPeople(m.zeroDiff)}</div></div>
@@ -1445,6 +1480,7 @@ function closeProposals(){
   view.classList.remove('show');view.setAttribute('aria-hidden','true');
 }
 document.getElementById('proposalsBtn').addEventListener('click',openProposals);
+document.getElementById('printProposalsBtn').addEventListener('click',()=>window.print());
 document.getElementById('closeProposalsBtn').addEventListener('click',closeProposals);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('proposalsView').classList.contains('show'))closeProposals();});
 
