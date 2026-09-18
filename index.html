@@ -321,6 +321,28 @@ const GUARNICION_META_RAW = [
   ["Yapeyú",57,"EA",81],["Zapala",69,"EA",28]
 ];
 
+const GUARNICION_PROVINCIAS_RAW = [
+  ["CABA",["CABA"]],
+  ["Buenos Aires",["Arana","Azul","Bahía Blanca","Campo de Mayo - El Palomar","City Bell","Coronel Pringles","Junín","La Plata","Magdalena","Mar del Plata","Olavarría","Pigüé","San Nicolás","Tandil"]],
+  ["Catamarca",["Catamarca"]],
+  ["Chaco",["Resistencia"]],
+  ["Chubut",["Colonia Sarmiento","Comodoro Rivadavia","Esquel","Rio Mayo"]],
+  ["Córdoba",["Córdoba","Grl Ordoñez","Río Cuarto"]],
+  ["Corrientes",["Corrientes","Curuzú Cuatiá","Goya","Mercedes (Corrientes)","Monte Caseros","Paso de los Libres","Santo Tomé (Corrientes)","Yapeyú"]],
+  ["Entre Ríos",["Chajarí","Concepción del Uruguay","Concordia","Crespo","Grl Galarza","Gualeguaychú","Paraná","Rosario del Tala","Villaguay"]],
+  ["Formosa",["Formosa"]],["Jujuy",["Jujuy"]],
+  ["La Pampa",["Grl Pico","Santa Rosa","Toay"]],["La Rioja",["La Rioja"]],
+  ["Mendoza",["Campo Los Andes","Mendoza","Puente del Inca","San Rafael","Tupungato","Uspallata"]],
+  ["Misiones",["Apóstoles","Bernardo de Irigoyen","Posadas","Puerto Iguazú","San Javier"]],
+  ["Neuquén",["Covunco","Junín de los Andes","Las Lajas","Neuquén","Primeros Pinos","San Martín de los Andes","Zapala"]],
+  ["Río Negro",["San Carlos de Bariloche"]],["Salta",["Salta","San Antonio de los Cobres","Tartagal"]],
+  ["San Juan",["San Juan"]],["San Luis",["San Luis"]],
+  ["Santa Cruz",["Comandante Piedrabuena","Puerto Deseado","Puerto Santa Cruz","Río Gallegos","Rospentek"]],
+  ["Santa Fe",["Guadalupe","Rosario","San Lorenzo","Santa Fe","Santo Tomé (Santa Fe)"]],
+  ["Santiago del Estero",["Santiago del Estero"]],["Tierra del Fuego",["Río Grande","Ushuaia"]],
+  ["Tucumán",["Tucumán"]]
+];
+
 // Cantidad fija de Soldados Voluntarios por guarnición (todos grado VP).
 const SOLDADOS_VP_RAW = [
   ["Apóstoles",293],["Arana",191],["Azul",118],["Bahía Blanca",181],["Bernardo de Irigoyen",56],
@@ -367,6 +389,7 @@ function normalize(s){
 const DEFAULT_PCT = {};
 const CANON_GUARNICION = {};
 const GUARNICION_META = {};
+const GUARNICION_PROVINCIA = {};
 DEFAULT_PCT_RAW.forEach(([label, pct]) => {
   DEFAULT_PCT[normalize(label)] = pct;
   CANON_GUARNICION[normalize(label)] = label;
@@ -374,6 +397,9 @@ DEFAULT_PCT_RAW.forEach(([label, pct]) => {
 GUARNICION_META_RAW.forEach(([label, rankingEstudio, fuerza, rankingDJ]) => {
   GUARNICION_META[normalize(label)] = { rankingEstudio, fuerza, rankingDJ };
 });
+GUARNICION_PROVINCIAS_RAW.forEach(([provincia, nombres]) => nombres.forEach(nombre => {
+  GUARNICION_PROVINCIA[normalize(nombre)] = provincia;
+}));
 // Cualquier guarnición que no esté en la lista de 85 (o que sea "Buenos Aires..." en cualquier variante,
 // esté vacía, diga "a asignar" u otra cosa) se resuelve como CABA.
 function resolveGuarnicion(raw){
@@ -637,7 +663,7 @@ function renderPctTable(){
     const totalG = c.Oficial + c.Suboficial + c['Soldado Voluntario'];
     const pctEfectivo = totalEfectivo ? totalG / totalEfectivo * 100 : 0;
     const meta = GUARNICION_META[normalize(g)] || { rankingEstudio:999, fuerza:'', rankingDJ:999 };
-    return { guarnicion:g, rankingEstudio:meta.rankingEstudio, fuerza:meta.fuerza, rankingDJ:meta.rankingDJ,
+    return { guarnicion:g, provincia:GUARNICION_PROVINCIA[normalize(g)] || 'Sin asignar', rankingEstudio:meta.rankingEstudio, fuerza:meta.fuerza, rankingDJ:meta.rankingDJ,
       of:c.Oficial, subof:c.Suboficial, sold:c['Soldado Voluntario'], total:totalG,
       pctEfectivo, pctZona:pctMatrix[g] || 0, gasto:totals[g] || 0 };
   });
@@ -652,7 +678,7 @@ function renderPctTable(){
     return `<th class="${isNum?'num':''}"><button class="sort-btn" data-sort="${key}">${label}<span class="sort-arrow">${arrow}</span></button></th>`;
   };
   let html = '<thead><tr>' +
-    sortHeader('Guarnición','guarnicion') + sortHeader('Ranking estudio','rankingEstudio',true) +
+    sortHeader('Guarnición','guarnicion') + sortHeader('Provincia','provincia') + sortHeader('Ranking estudio','rankingEstudio',true) +
     sortHeader('Fuerza','fuerza') + sortHeader('Ranking DJ','rankingDJ',true) +
     sortHeader('Of','of',true) + sortHeader('Subof','subof',true) + sortHeader('Sold','sold',true) +
     sortHeader('Total','total',true) + sortHeader('% efectivo','pctEfectivo',true) +
@@ -661,7 +687,7 @@ function renderPctTable(){
   for (const r of rows) {
     const forceClass = r.fuerza && r.fuerza !== 'EA' ? 'force-' + r.fuerza.toLowerCase() : '';
     html += `<tr class="${forceClass}" data-g="${escapeAttr(r.guarnicion)}">
-      <td>${r.guarnicion}</td><td class="num">${r.rankingEstudio}</td><td>${r.fuerza}</td><td class="num">${r.rankingDJ}</td>
+      <td>${r.guarnicion}</td><td>${r.provincia}</td><td class="num">${r.rankingEstudio}</td><td>${r.fuerza}</td><td class="num">${r.rankingDJ}</td>
       <td class="num pct-row-of">${r.of.toLocaleString('es-AR')}</td>
       <td class="num pct-row-subof">${r.subof.toLocaleString('es-AR')}</td>
       <td class="num pct-row-sold">${r.sold.toLocaleString('es-AR')}</td>
@@ -675,7 +701,7 @@ function renderPctTable(){
   const totalOf = personas.filter(p=>p.tipo==='Oficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSubof = personas.filter(p=>p.tipo==='Suboficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSold = personas.filter(p=>p.tipo==='Soldado Voluntario').reduce((s,p)=>s+(p.count||1),0);
-  html += `</tbody><tfoot><tr><td colspan="4">Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
+  html += `</tbody><tfoot><tr><td colspan="5">Total</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr></tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
   document.querySelectorAll('#pctTable .sort-btn').forEach(btn => btn.addEventListener('click', () => {
