@@ -21,10 +21,9 @@
   h1,h2,h3{font-family:'Source Serif 4',serif;font-weight:600;margin:0;}
   .mono{font-family:'IBM Plex Mono',monospace;}
 
-  header.top{background:var(--navy);color:#f2efe4;padding:28px 40px;}
-  .top-inner{max-width:1240px;margin:0 auto;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;}
-  header.top h1{font-size:1.7rem;color:#fff;}
-  header.top .subtitle{color:#b9c0d4;font-size:.92rem;margin-top:6px;}
+  header.top{background:var(--navy);color:#f2efe4;padding:15px 28px;}
+  .top-inner{max-width:1240px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;}
+  header.top h1{font-size:1.32rem;color:#fff;}
   .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .controls label{font-size:.78rem;color:#b9c0d4;display:block;margin-bottom:3px;}
   select, .btn{
@@ -57,6 +56,9 @@
   @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr);}}
 
   .panel{background:var(--card);border:1px solid var(--line);padding:20px;overflow-x:auto;}
+  .matrix-scroll{max-height:calc(100vh - 310px);min-height:280px;overflow:auto;border:1px solid var(--line);}
+  .matrix-scroll table{margin:0;}
+  .matrix-scroll thead th{position:sticky;top:0;z-index:6;background:#f4f1e8;box-shadow:0 1px 0 var(--line);}
 
   table{width:100%;border-collapse:collapse;font-size:.87rem;}
   th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);}
@@ -106,16 +108,22 @@
   @media(max-width:900px){.action-toolbar{align-items:flex-start}.variants-grid{flex-wrap:wrap;}}
 
   @media print{
-    @page{size:A4 landscape;margin:9mm;}
+    @page{size:A4 landscape;margin:19mm 9mm 9mm;}
     body{background:#fff;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    header.top{padding:12px 18px;}
+    header.top{position:fixed;top:-15mm;left:0;right:0;height:12mm;padding:2mm 0;background:var(--navy) !important;z-index:50;}
+    header.top h1{font-size:12pt;}
+    .print-month{display:inline !important;font-size:9pt;color:#dce1ee;margin-left:10px;}
     header.top .controls,#status,.action-toolbar,footer{display:none !important;}
-    main{max-width:none;padding:14px 0 0;}
+    main{max-width:none;padding:0;}
     .kpis{margin-bottom:14px;}
     .kpi{padding:10px 14px;}
     .kpi .value{font-size:1.35rem;}
     section{margin-bottom:18px;}
     .panel{padding:8px;border:0;overflow:visible;}
+    .matrix-scroll{max-height:none;min-height:0;overflow:visible;border:0;}
+    .matrix-scroll thead{display:table-header-group;}
+    .matrix-scroll thead th{position:static;background:#f4f1e8 !important;}
+    tr{break-inside:avoid;page-break-inside:avoid;}
     table{font-size:7pt;}
     th,td{padding:3px 4px;}
     .sort-arrow,.legal-row-btn{display:none !important;}
@@ -151,8 +159,7 @@
 <header class="top">
   <div class="top-inner">
     <div>
-      <h1>Estudio de % de Zonas</h1>
-      <div class="subtitle">Gasto en suplemento de guarnición — Oficiales, Suboficiales y Soldados Voluntarios</div>
+      <h1>Estudio de % de Zonas - Departamento Planes <span class="print-month" id="printMonthLabel" style="display:none;"></span></h1>
     </div>
     <div class="controls">
       <div>
@@ -162,6 +169,10 @@
       <div>
         <label>&nbsp;</label>
         <button class="btn secondary" id="refreshBtn">Actualizar datos</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button class="btn secondary" id="fullscreenBtn">Pantalla completa</button>
       </div>
     </div>
   </div>
@@ -184,7 +195,7 @@
         <span class="note">Editable — se guarda en este navegador</span>
       </div>
       <div class="panel">
-        <table class="pct-table" id="pctTable"></table>
+        <div class="matrix-scroll"><table class="pct-table" id="pctTable"></table></div>
         <div class="action-toolbar">
           <button class="btn secondary" id="resetPctBtn">Restablecer todos los % a cero</button>
           <button class="btn" id="legalPctBtn">Volver a los % establecidos por ley</button>
@@ -488,6 +499,7 @@ async function loadAll(){
     sel.innerHTML = monthHeaders.map(h => `<option value="${escapeAttr(h)}">${h}</option>`).join('');
     sel.value = defaultHeader;
     selectedMonth = defaultHeader;
+    document.getElementById('printMonthLabel').textContent = '· ' + selectedMonth.toUpperCase() + ' 2026';
 
     // load saved state (usa la lista de guarniciones ya resuelta)
     guarniciones = [...new Set(personas.map(p => p.guarnicion))].sort((a,b)=>a.localeCompare(b,'es'));
@@ -595,13 +607,15 @@ function renderKPIs(){
     return s + (legalPct === 0 ? (p.count || 1) : 0);
   }, 0);
   const zeroDiff = zeroCurrent - zeroLegal;
+  const totalPersonal = personas.reduce((s,p) => s + (p.count || 1), 0);
+  const zeroPct = totalPersonal ? zeroCurrent / totalPersonal * 100 : 0;
 
   document.getElementById('kpiTotal').innerHTML = money(total) + ' <small>/ mes</small>';
   const diffEl = document.getElementById('kpiDiff');
   const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
   diffEl.className = 'value ' + (diff < 0 ? 'diff-saving' : diff > 0 ? 'diff-extra' : '');
   diffEl.innerHTML = sign + money(Math.abs(diff)) + ` <small>(${diffPct > 0 ? '+' : ''}${diffPct.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%)</small>`;
-  document.getElementById('kpiZero').innerHTML = zeroCurrent.toLocaleString('es-AR') + ' <small>personas</small>';
+  document.getElementById('kpiZero').innerHTML = zeroCurrent.toLocaleString('es-AR') + ` <small>personas (${zeroPct.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}% del total)</small>`;
   const zeroDiffEl = document.getElementById('kpiZeroDiff');
   const zeroSign = zeroDiff > 0 ? '+' : zeroDiff < 0 ? '−' : '';
   zeroDiffEl.className = 'value ' + (zeroDiff > 0 ? 'diff-saving' : zeroDiff < 0 ? 'diff-extra' : '');
@@ -959,13 +973,26 @@ async function importVariants(file){
     alert('No se pudieron importar las variantes: ' + err.message);
   }
 }
+async function toggleFullscreen(){
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+    else await document.exitFullscreen();
+  } catch(err) {
+    alert('No se pudo cambiar el modo de pantalla completa: ' + err.message);
+  }
+}
 
 /* ==================== EVENTS ==================== */
 document.getElementById('refreshBtn').addEventListener('click', loadAll);
 document.getElementById('monthSelect').addEventListener('change', (e) => {
   selectedMonth = e.target.value;
+  document.getElementById('printMonthLabel').textContent = '· ' + selectedMonth.toUpperCase() + ' 2026';
   computeAll();
   renderAll();
+});
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', () => {
+  document.getElementById('fullscreenBtn').textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
 });
 document.getElementById('resetPctBtn').addEventListener('click', () => {
   if (!confirm('¿Restablecer todos los % a cero?')) return;
