@@ -771,6 +771,7 @@ function renderPctTable(){
     </tr>`;
   }
   const grandTotal = personas.reduce((s,p)=>s+p.suplemento,0);
+  const totalEfectivo = personas.reduce((s,p)=>s+(p.count||1),0);
   const totalOf = personas.filter(p=>p.tipo==='Oficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSubof = personas.filter(p=>p.tipo==='Suboficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSold = personas.filter(p=>p.tipo==='Soldado Voluntario').reduce((s,p)=>s+(p.count||1),0);
