@@ -373,6 +373,63 @@
 .proposal-metric .label{min-height:18px!important;}
 </style>
 
+
+<style>
+/* Panel superior Refrigerio */
+.refrig-top-panel{
+  display:grid;grid-template-columns:minmax(0,2.4fr) minmax(190px,.75fr) minmax(210px,.85fr);
+  gap:10px;margin:10px 0 14px;align-items:stretch;
+}
+.refrig-control-card,.refrig-kpi,.refrig-grand-kpi{
+  border:1px solid var(--line);border-radius:7px;background:#fff;
+}
+.refrig-control-card{
+  padding:10px 12px;display:grid;grid-template-columns:auto 115px minmax(260px,1fr);
+  gap:12px;align-items:end;
+}
+.refrig-control-card .refrig-group{min-width:0;}
+.refrig-control-card .refrig-group label{
+  display:block;font:600 .70rem Arial,sans-serif;color:var(--ink-soft);margin-bottom:5px;
+}
+.refrig-toggle{height:34px;}
+.refrig-toggle button{min-width:54px;height:34px;padding:0 12px;}
+.refrig-days{height:34px;width:100%;box-sizing:border-box;}
+.refrig-multiselect{position:relative;min-width:0;}
+.refrig-multi-btn{
+  width:100%;height:34px;border:1px solid #aeb4c2;border-radius:5px;background:#fff;color:var(--navy);
+  padding:0 9px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font:600 .74rem Arial,sans-serif;cursor:pointer;text-align:left;
+}
+.refrig-multi-btn:disabled{opacity:.45;cursor:not-allowed;background:#f2f2f2;}
+.refrig-multi-btn span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.refrig-multi-menu{
+  display:none;position:absolute;left:0;right:0;top:38px;z-index:150;background:#fff;border:1px solid #aeb4c2;
+  border-radius:6px;box-shadow:0 8px 22px rgba(20,31,55,.16);max-height:260px;overflow:auto;padding:5px;
+}
+.refrig-multi-menu.show{display:block;}
+.refrig-option{
+  display:flex;align-items:center;gap:7px;padding:6px 7px;border-radius:4px;font:14px Arial,sans-serif;cursor:pointer;
+}
+.refrig-option:hover{background:#f2f4f8;}
+.refrig-option input{width:16px;height:16px;accent-color:var(--navy);}
+.refrig-empty-option{padding:10px 8px;color:var(--ink-soft);font:14px Arial,sans-serif;}
+.refrig-kpi,.refrig-grand-kpi{
+  padding:10px 12px;display:flex;flex-direction:column;justify-content:center;text-align:center;
+}
+.refrig-kpi .label,.refrig-grand-kpi .label{font:700 .74rem Arial,sans-serif;color:var(--ink-soft);text-transform:uppercase;}
+.refrig-kpi .value,.refrig-grand-kpi .value{font:700 1.05rem 'IBM Plex Mono',monospace;color:var(--navy);margin-top:5px;}
+.refrig-kpi .sub{font:14px Arial,sans-serif;color:var(--ink-soft);margin-top:3px;}
+.refrig-grand-kpi{background:linear-gradient(135deg,var(--navy),var(--navy-2));border-color:var(--navy);color:#fff;}
+.refrig-grand-kpi .label,.refrig-grand-kpi .sub-label,.refrig-grand-kpi .value{color:#fff;}
+.refrig-grand-kpi .label{font-size:.82rem;}
+.refrig-grand-kpi .sub-label{font:14px Arial,sans-serif;margin-top:2px;opacity:.86;}
+.refrig-grand-kpi .value{font-size:1.12rem;}
+@media(max-width:1100px){
+  .refrig-top-panel{grid-template-columns:1fr 1fr;}
+  .refrig-control-card{grid-column:1/-1;}
+}
+</style>
+
 </head>
 <body>
 
@@ -435,6 +492,42 @@
     <div class="kpi"><div class="label">Diferencia con Ajustes</div><div class="value" id="kpiZeroDiff">—</div></div>
   </div>
 
+
+  <div class="refrig-top-panel" id="refrigToolbar" style="display:none;">
+    <div class="refrig-control-card">
+      <div class="refrig-group">
+        <label>Refrigerio</label>
+        <div class="refrig-toggle">
+          <button type="button" id="refrigYesBtn">SI</button>
+          <button type="button" id="refrigNoBtn">NO</button>
+        </div>
+      </div>
+      <div class="refrig-group">
+        <label for="refrigDays">Días de refrigerio</label>
+        <input class="refrig-days" id="refrigDays" type="number" min="0" max="31" step="1" value="23">
+      </div>
+      <div class="refrig-group refrig-garrison-group">
+        <label>Guarniciones Zona 0% con refrigerio</label>
+        <div class="refrig-multiselect" id="refrigMulti">
+          <button type="button" class="refrig-multi-btn" id="refrigMultiBtn">
+            <span id="refrigMultiText">Seleccionar guarniciones</span><span>▾</span>
+          </button>
+          <div class="refrig-multi-menu" id="refrigMultiMenu"></div>
+        </div>
+      </div>
+    </div>
+    <div class="refrig-kpi">
+      <div class="label">Total Mensual Refrigerio</div>
+      <div class="value" id="refrigLiveTotal">$ 0</div>
+      <div class="sub" id="refrigPeopleTotal">0 personas</div>
+    </div>
+    <div class="refrig-grand-kpi">
+      <div class="label">TOTAL GENERAL</div>
+      <div class="sub-label">Zona + Refrigerio</div>
+      <div class="value" id="refrigLiveCombined">$ 0</div>
+    </div>
+  </div>
+
   <section class="two-col" id="mainGrid" style="display:none;">
     <div>
       <div class="section-head">
@@ -442,25 +535,6 @@
         <span class="note">Editable — se guarda en este navegador</span>
       </div>
       <div class="panel">
-
-        <div class="refrig-toolbar" id="refrigToolbar">
-          <div class="refrig-group">
-            <label>Refrigerio</label>
-            <div class="refrig-toggle">
-              <button type="button" id="refrigYesBtn">Refrigerio SI</button>
-              <button type="button" id="refrigNoBtn">Refrigerio NO</button>
-            </div>
-          </div>
-          <div class="refrig-group">
-            <label for="refrigDays">Días de refrigerio</label>
-            <input class="refrig-days" id="refrigDays" type="number" min="0" max="31" step="1" value="23">
-          </div>
-          <div class="refrig-live">
-            <div class="rl-label">Total mensual Refrigerio</div>
-            <div class="rl-value" id="refrigLiveTotal">$ 0</div>
-            <div class="rl-total" id="refrigLiveCombined">Zona + Refrigerio: $ 0</div>
-          </div>
-        </div>
 
         <div class="matrix-filters" id="matrixFilters">
           <div class="matrix-filter"><label for="matrixFilterZona">Zona</label><select id="matrixFilterZona"></select></div>
@@ -946,16 +1020,48 @@ function refrigerioMetrics(pcts=pctMatrix, enabled=refrigerioEnabled, days=refri
 function saveRefrigerio(){
   localStorage.setItem(LS_REFRIG,JSON.stringify({enabled:refrigerioEnabled,days:refrigerioDays,selected:refrigerioGuarniciones}));
 }
+function zeroPctGuarniciones(){
+  return guarniciones.filter(g=>{
+    const legal=DEFAULT_PCT[normalize(g)]??0;
+    const pct=normalizePct(pctMatrix[g]!==undefined?pctMatrix[g]:legal);
+    return pct===0;
+  }).sort((a,b)=>a.localeCompare(b,'es'));
+}
+function renderRefrigerioSelector(){
+  const btn=document.getElementById('refrigMultiBtn');
+  const menu=document.getElementById('refrigMultiMenu');
+  const txt=document.getElementById('refrigMultiText');
+  if(!btn||!menu||!txt)return;
+  const zero=zeroPctGuarniciones();
+  // Si una guarnición deja de ser Zona 0, deja automáticamente de integrar Refrigerio.
+  Object.keys(refrigerioGuarniciones).forEach(g=>{if(!zero.includes(g)) delete refrigerioGuarniciones[g];});
+  btn.disabled=!refrigerioEnabled;
+  const selected=zero.filter(g=>refrigerioGuarniciones[g]);
+  txt.textContent=!refrigerioEnabled?'Refrigerio desactivado':
+    selected.length===0?'Seleccionar guarniciones Zona 0%':
+    selected.length===1?selected[0]:
+    `${selected.length} guarniciones seleccionadas`;
+  menu.innerHTML=zero.length?zero.map(g=>`<label class="refrig-option">
+    <input type="checkbox" data-rg="${escapeAttr(g)}" ${refrigerioGuarniciones[g]?'checked':''}>
+    <span>${g}</span><span style="margin-left:auto;color:var(--ink-soft);">${personalCountGuarnicion(g).toLocaleString('es-AR')} pers.</span>
+  </label>`).join(''):`<div class="refrig-empty-option">No hay guarniciones con Zona 0%.</div>`;
+  menu.querySelectorAll('input[data-rg]').forEach(chk=>chk.addEventListener('change',()=>{
+    refrigerioGuarniciones[chk.dataset.rg]=chk.checked;
+    saveRefrigerio();updateRefrigerioUI();renderKPIs();renderPctTable();renderVariants();
+  }));
+}
 function updateRefrigerioUI(){
   const yes=document.getElementById('refrigYesBtn'), no=document.getElementById('refrigNoBtn'), days=document.getElementById('refrigDays');
   if(yes) yes.classList.toggle('active',refrigerioEnabled);
   if(no) no.classList.toggle('active',!refrigerioEnabled);
   if(days){days.value=refrigerioDays;days.disabled=!refrigerioEnabled;}
+  renderRefrigerioSelector();
   const r=refrigerioMetrics();
   const zone=personas.reduce((s,p)=>s+(p.suplemento||0),0);
-  const a=document.getElementById('refrigLiveTotal'),b=document.getElementById('refrigLiveCombined');
+  const a=document.getElementById('refrigLiveTotal'),b=document.getElementById('refrigLiveCombined'),c=document.getElementById('refrigPeopleTotal');
   if(a)a.textContent=money(r.total);
-  if(b)b.textContent=`Zona + Refrigerio: ${money(zone+r.total)}`;
+  if(b)b.textContent=money(zone+r.total);
+  if(c)c.textContent=`${r.people.toLocaleString('es-AR')} personas con refrigerio`;
 }
 function refreshAfterRefrigerio(){
   saveRefrigerio(); updateRefrigerioUI(); renderPctTable(); renderKPIs(); renderVariants();
@@ -1114,6 +1220,7 @@ function renderAll(){
   updateRefrigerioUI();
 
   document.getElementById('kpis').style.display = '';
+  document.getElementById('refrigToolbar').style.display = '';
   document.getElementById('mainGrid').style.display = '';
 }
 
@@ -1121,7 +1228,7 @@ function renderAll(){
 function renderKPIs(){
   const zoneTotal = personas.reduce((s,p) => s + p.suplemento, 0);
   const refrig = refrigerioMetrics();
-  const total = zoneTotal + refrig.total;
+  const total = zoneTotal;
   const legalTotal = personas.reduce((s,p) => {
     const legalPct = DEFAULT_PCT[normalize(p.guarnicion)] || 0;
     return s + (p.haber || 0) * legalPct / 100 * (p.count || 1);
@@ -1225,7 +1332,7 @@ function renderPctTable(){
     sortHeader('Fuerza','fuerza') + sortHeader('Ranking DJ','rankingDJ',true) +
     sortHeader('Of','of',true) + sortHeader('Subof','subof',true) + sortHeader('Sold','sold',true) +
     sortHeader('Total','total',true) + sortHeader('% efectivo','pctEfectivo',true) +
-    sortHeader('% zona','pctZona',true) + '<th>Refrigerio</th>' + sortHeader('Gasto guarnición','gasto',true) +
+    sortHeader('% zona','pctZona',true) + sortHeader('Gasto guarnición','gasto',true) +
     '</tr></thead><tbody>';
   for (const r of rows) {
     const forceClass = r.fuerza && r.fuerza !== 'EA' ? 'force-' + r.fuerza.toLowerCase() : '';
@@ -1237,7 +1344,6 @@ function renderPctTable(){
       <td class="num">${r.total.toLocaleString('es-AR')}</td>
       <td class="num">${r.pctEfectivo.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td>
       <td class="num"><span class="pct-control"><input class="pct-input ${pctChangeClass(r.guarnicion,r.pctZona)}" type="number" step="5" min="0" max="100" data-g="${escapeAttr(r.guarnicion)}" value="${r.pctZona}"><span class="pct-suffix">%</span><button class="legal-row-btn" data-legal-g="${escapeAttr(r.guarnicion)}" title="Volver al porcentaje legal de ${escapeAttr(r.guarnicion)}">↺</button></span></td>
-      <td><label class="refrig-check ${(!refrigerioEnabled||r.pctZona!==0)?'refrig-disabled':''}"><input class="refrig-row-check" type="checkbox" data-g="${escapeAttr(r.guarnicion)}" ${refrigerioGuarniciones[r.guarnicion]?'checked':''} ${(!refrigerioEnabled||r.pctZona!==0)?'disabled':''}> SI</label></td>
       <td class="num pct-row-total">${money(r.gasto)}</td>
     </tr>`;
   }
@@ -1249,8 +1355,8 @@ function renderPctTable(){
   const refrigNow=refrigerioMetrics();
   html += `</tbody><tfoot>
     <tr><td colspan="6">Gasto de Zona</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr>
-    <tr class="refrig-summary-row"><td colspan="13">Total Mensual Refrigerio · ${refrigerioEnabled?'SI':'NO'} · ${refrigerioDays} días · ${refrigNow.people.toLocaleString('es-AR')} personas</td><td class="num">${money(refrigNow.total)}</td></tr>
-    <tr class="refrig-total-row"><td colspan="13">GASTO TOTAL · ZONA + REFRIGERIO</td><td class="num">${money(grandTotal+refrigNow.total)}</td></tr>
+    <tr class="refrig-summary-row"><td colspan="12">Total Mensual Refrigerio · ${refrigerioEnabled?'SI':'NO'} · ${refrigerioDays} días · ${refrigNow.people.toLocaleString('es-AR')} personas</td><td class="num">${money(refrigNow.total)}</td></tr>
+    <tr class="refrig-total-row"><td colspan="12">GASTO TOTAL · ZONA + REFRIGERIO</td><td class="num">${money(grandTotal+refrigNow.total)}</td></tr>
   </tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
@@ -1283,10 +1389,6 @@ function renderPctTable(){
     inp.addEventListener('input', schedulePctRecalculation);
     inp.addEventListener('change', schedulePctRecalculation);
   });
-  document.querySelectorAll('#pctTable .refrig-row-check').forEach(chk=>chk.addEventListener('change',()=>{
-    refrigerioGuarniciones[chk.dataset.g]=chk.checked;
-    refreshAfterRefrigerio();
-  }));
   document.querySelectorAll('#pctTable .legal-row-btn').forEach(btn => btn.addEventListener('click', () => {
     const g = btn.dataset.legalG;
     pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
@@ -1562,8 +1664,16 @@ document.getElementById('importVariantsFile').addEventListener('change', async e
   e.target.value = '';
 });
 
+
+document.getElementById('refrigMultiBtn').addEventListener('click',e=>{
+  e.stopPropagation();
+  if(refrigerioEnabled) document.getElementById('refrigMultiMenu').classList.toggle('show');
+});
+document.getElementById('refrigMultiMenu').addEventListener('click',e=>e.stopPropagation());
+document.addEventListener('click',()=>document.getElementById('refrigMultiMenu').classList.remove('show'));
+
 document.getElementById('refrigYesBtn').addEventListener('click',()=>{refrigerioEnabled=true;refreshAfterRefrigerio();});
-document.getElementById('refrigNoBtn').addEventListener('click',()=>{refrigerioEnabled=false;refreshAfterRefrigerio();});
+document.getElementById('refrigNoBtn').addEventListener('click',()=>{refrigerioEnabled=false;document.getElementById('refrigMultiMenu').classList.remove('show');refreshAfterRefrigerio();});
 document.getElementById('refrigDays').addEventListener('change',e=>{
   refrigerioDays=Math.max(0,Math.min(31,parseInt(e.target.value,10)||0));refreshAfterRefrigerio();
 });
