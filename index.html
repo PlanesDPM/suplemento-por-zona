@@ -1677,13 +1677,7 @@ document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscr
 document.addEventListener('fullscreenchange', () => {
   document.getElementById('fullscreenBtn').textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa';
 });
-document.getElementById('resetPctBtn').addEventListener('click', async () => {
-  if (!(await proConfirm('Restablecer porcentajes','Todos los porcentajes de zona pasarán a 0 %.','Restablecer'))) return;
-  for (const g of guarniciones) pctMatrix[g] = 0;
-  savePct();
-  computeAll();
-  renderAll();
-});
+
 document.getElementById('legalPctBtn').addEventListener('click', async () => {
   if (!(await proConfirm('Porcentajes legales','Se reemplazarán los valores actuales por los porcentajes establecidos por ley.','Aplicar valores legales'))) return;
   for (const g of guarniciones) pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
