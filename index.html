@@ -430,6 +430,47 @@
 }
 </style>
 
+
+<style>
+/* Propuestas completas: ningún cambio de porcentaje queda oculto */
+#proposalsView{
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+}
+#proposalsView .proposals-body{
+  align-items:start !important;
+  padding-bottom:24px !important;
+}
+#proposalsView .proposal-card{
+  max-height:none !important;
+  overflow:visible !important;
+}
+#proposalsView .proposal-list,
+#proposalsView .proposal-changes,
+#proposalsView .proposal-change-list{
+  max-height:none !important;
+  overflow:visible !important;
+}
+#proposalsView .proposal-more,
+#proposalsView .proposal-truncated{
+  display:none !important;
+}
+@media print{
+  #proposalsView{
+    position:static !important;
+    height:auto !important;
+    min-height:100% !important;
+    overflow:visible !important;
+  }
+  #proposalsView .proposals-body,
+  #proposalsView .proposal-card{
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -445,7 +486,10 @@
       <button class="btn secondary" id="closeProposalsBtn">Volver al estudio</button>
     </div>
   </div>
-  <div class="proposals-body" id="proposalsBody"></div>
+  <div style="font:14px Arial,sans-serif;color:var(--ink-soft);padding:0 18px 8px;">
+      Se muestran todas las guarniciones que modifican su porcentaje. Desplácese verticalmente para consultar la propuesta completa.
+    </div>
+    <div class="proposals-body" id="proposalsBody"></div>
 </div>
 
 <div id="loadingOverlay">
