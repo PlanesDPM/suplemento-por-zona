@@ -540,6 +540,111 @@
 }
 </style>
 
+
+<style>
+/* ===== PRESENTACIÓN DE PROPUESTAS: CONTENIDO COMPLETO ===== */
+#proposalsView.show{
+  display:flex !important;
+  flex-direction:column !important;
+  height:100vh !important;
+  overflow:hidden !important;
+}
+#proposalsView .proposals-top{flex:0 0 auto !important;}
+#proposalsView .proposals-body{
+  flex:1 1 0 !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  align-items:stretch !important;
+}
+#proposalsView .proposal-card{
+  min-height:0 !important;
+  height:100% !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  display:block !important;
+  scrollbar-width:auto;
+}
+#proposalsView .proposal-changes,
+#proposalsView .proposal-list,
+#proposalsView .proposal-change-section,
+#proposalsView .proposal-refrig,
+#proposalsView .proposal-refrig-list{
+  height:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+}
+#proposalsView .proposal-head{
+  position:sticky !important;
+  top:0 !important;
+  z-index:10 !important;
+}
+
+/* IMPRESIÓN:
+   cada Modo de Acción se imprime completo, continuando en tantas páginas
+   como sean necesarias. No depende de lo que entra en pantalla. */
+@media print{
+  @page{size:A4 landscape;margin:9mm;}
+  html,body{
+    height:auto !important;
+    overflow:visible !important;
+  }
+  body > *:not(#proposalsView){display:none !important;}
+  #proposalsView,
+  #proposalsView.show{
+    display:block !important;
+    position:static !important;
+    inset:auto !important;
+    width:auto !important;
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+    background:#fff !important;
+  }
+  #proposalsView .proposals-actions{display:none !important;}
+  #proposalsView .proposals-top{
+    position:static !important;
+    display:block !important;
+    margin-bottom:5mm !important;
+  }
+  #proposalsView .proposals-body{
+    display:block !important;
+    width:100% !important;
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+    padding:0 !important;
+  }
+  #proposalsView .proposal-card{
+    display:block !important;
+    width:100% !important;
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+    margin:0 0 8mm 0 !important;
+    padding-bottom:4mm !important;
+    box-shadow:none !important;
+    break-inside:auto !important;
+    page-break-inside:auto !important;
+    page-break-after:always !important;
+  }
+  #proposalsView .proposal-card:last-child{page-break-after:auto !important;}
+  #proposalsView .proposal-head{
+    position:static !important;
+  }
+  #proposalsView .proposal-change,
+  #proposalsView .proposal-metric,
+  #proposalsView .proposal-refrig-list > div{
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+  }
+  #proposalsView .proposal-change-label,
+  #proposalsView .proposal-changes-title{
+    break-after:avoid !important;
+    page-break-after:avoid !important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -1849,27 +1954,21 @@ function renderProposals(){
   body.innerHTML=saved.map(({variant,index},position)=>{
     const m=metricsForPcts(variant.pcts,variant);
     const changes=proposalChangeObjects(variant.pcts);
-    const maxRows=saved.length<=2?16:saved.length===3?13:10;
     const ups=changes.filter(c=>c.current>c.legal);
     const downs=changes.filter(c=>c.current<c.legal);
-    let remaining=maxRows;
-    const visibleUps=ups.slice(0,remaining); remaining-=visibleUps.length;
-    const visibleDowns=downs.slice(0,remaining);
     const upHtml=ups.length?`<div class="proposal-change-section">
       <div class="proposal-change-label up">SUBEN %</div>
-      ${visibleUps.map(c=>`<div class="proposal-change up">
+      ${ups.map(c=>`<div class="proposal-change up">
         <span class="g" title="${escapeAttr(c.g)}">${c.g}</span>
         <span class="v">${c.legal}% → ${c.current}%</span>
       </div>`).join('')}
-      ${ups.length>visibleUps.length?`<div class="proposal-more">+ ${ups.length-visibleUps.length} subas adicionales</div>`:''}
     </div>`:'';
     const downHtml=downs.length?`<div class="proposal-change-section">
       <div class="proposal-change-label down">BAJAN %</div>
-      ${visibleDowns.map(c=>`<div class="proposal-change down">
+      ${downs.map(c=>`<div class="proposal-change down">
         <span class="g" title="${escapeAttr(c.g)}">${c.g}</span>
         <span class="v">${c.legal}% → ${c.current}%</span>
       </div>`).join('')}
-      ${downs.length>visibleDowns.length?`<div class="proposal-more">+ ${downs.length-visibleDowns.length} bajas adicionales</div>`:''}
     </div>`:'';
     const list=changes.length?(upHtml+downHtml):`<div class="proposal-empty">Sin cambios respecto de los valores legales</div>`;
     const more='';
@@ -1884,8 +1983,7 @@ function renderProposals(){
       <div class="proposal-refrig">
         <div class="proposal-refrig-head"><span>Refrigerio ${m.refrigerioEnabled?'SI':'NO'} · ${m.refrigerioDays} días</span><span>${money(m.refrigerioTotal)}</span></div>
         <div class="proposal-refrig-list">${m.refrigerioEnabled && m.refrigerioDetail.length
-          ? m.refrigerioDetail.slice(0,4).map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost)}</span></div>`).join('')+
-            (m.refrigerioDetail.length>4?`<div><span>+ ${m.refrigerioDetail.length-4} guarniciones</span><span></span></div>`:'')
+          ? m.refrigerioDetail.map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost)}</span></div>`).join('')
           : '<div><span>Sin gasto de refrigerio</span><span></span></div>'}</div>
         <div class="proposal-refrig-head" style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line);"><span>Zona + Refrigerio</span><span>${money(m.total)}</span></div>
       </div>
