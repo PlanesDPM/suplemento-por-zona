@@ -645,6 +645,174 @@
 }
 </style>
 
+
+<style id="proposal-layout-final-fix">
+/* ===== CORRECCIÓN DEFINITIVA DE PRESENTACIÓN DE PROPUESTAS ===== */
+#proposalsView.show{
+  display:flex !important;
+  flex-direction:column !important;
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100vh !important;
+  overflow:hidden !important;
+}
+#proposalsView .proposals-top{flex:0 0 auto !important;}
+#proposalsView .proposals-body{
+  flex:1 1 0 !important;
+  min-height:0 !important;
+  height:0 !important;
+  overflow:hidden !important;
+  align-items:stretch !important;
+}
+#proposalsView .proposal-card{
+  display:flex !important;
+  flex-direction:column !important;
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+  padding-bottom:0 !important;
+}
+#proposalsView .proposal-head,
+#proposalsView .proposal-metrics,
+#proposalsView .proposal-refrig{
+  flex:0 0 auto !important;
+}
+#proposalsView .proposal-changes{
+  flex:1 1 0 !important;
+  min-height:0 !important;
+  height:0 !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  padding:8px 10px 18px !important;
+  scrollbar-gutter:stable !important;
+}
+#proposalsView .proposal-list,
+#proposalsView .proposal-change-section{
+  display:block !important;
+  height:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+}
+#proposalsView .proposal-change{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) auto !important;
+  break-inside:avoid !important;
+}
+#proposalsView .proposal-change .g{
+  white-space:normal !important;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  padding-right:8px !important;
+}
+#proposalsView .proposal-order-note{
+  font-weight:400 !important;
+  font-size:14px !important;
+  text-transform:none !important;
+  opacity:.82;
+}
+#proposalsView .proposal-change-label{
+  position:sticky !important;
+  top:0 !important;
+  z-index:3 !important;
+}
+
+/* IMPRESIÓN: TODO el contenido, sin depender del scroll de pantalla */
+@media print{
+  @page{size:A4 landscape;margin:9mm;}
+  html,body{
+    height:auto !important;
+    min-height:0 !important;
+    overflow:visible !important;
+  }
+  body > *:not(#proposalsView){display:none !important;}
+  #proposalsView,
+  #proposalsView.show{
+    display:block !important;
+    position:static !important;
+    inset:auto !important;
+    width:100% !important;
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+  }
+  #proposalsView .proposals-actions{display:none !important;}
+  #proposalsView .proposals-top{
+    display:block !important;
+    position:static !important;
+    margin:0 0 5mm !important;
+  }
+  #proposalsView .proposals-body{
+    display:block !important;
+    width:100% !important;
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+    padding:0 !important;
+  }
+  #proposalsView .proposal-card{
+    display:block !important;
+    width:100% !important;
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+    padding:0 !important;
+    margin:0 0 8mm !important;
+    border:1px solid #c9cdd6 !important;
+    box-shadow:none !important;
+    page-break-after:always !important;
+    break-after:page !important;
+  }
+  #proposalsView .proposal-card:last-child{
+    page-break-after:auto !important;
+    break-after:auto !important;
+  }
+  #proposalsView .proposal-head,
+  #proposalsView .proposal-metrics,
+  #proposalsView .proposal-refrig,
+  #proposalsView .proposal-changes,
+  #proposalsView .proposal-list,
+  #proposalsView .proposal-change-section{
+    display:block !important;
+    position:static !important;
+    height:auto !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow:visible !important;
+  }
+  #proposalsView .proposal-metrics{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+  }
+  #proposalsView .proposal-changes{
+    padding:4mm !important;
+  }
+  #proposalsView .proposal-change-label{
+    position:static !important;
+    break-after:avoid !important;
+    page-break-after:avoid !important;
+  }
+  #proposalsView .proposal-change{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) auto !important;
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+    padding:2.2mm 1mm !important;
+  }
+  #proposalsView .proposal-change .g{
+    white-space:normal !important;
+  }
+  #proposalsView .proposal-order-note{font-size:12px !important;}
+  #proposalsView .proposal-change-section{
+    margin-bottom:4mm !important;
+  }
+}
+</style>
+
 </head>
 <body>
 
@@ -1954,17 +2122,37 @@ function renderProposals(){
   body.innerHTML=saved.map(({variant,index},position)=>{
     const m=metricsForPcts(variant.pcts,variant);
     const changes=proposalChangeObjects(variant.pcts);
-    const ups=changes.filter(c=>c.current>c.legal);
-    const downs=changes.filter(c=>c.current<c.legal);
+    // Criterio de presentación:
+    // SUBEN: primero quienes parten de 0%; luego el resto por % resultante ascendente.
+    // BAJAN: primero quienes llegan a 0%; luego el resto por % resultante ascendente.
+    const ups=changes.filter(c=>c.current>c.legal).sort((a,b)=>{
+      // 1º: quienes SALEN de Zona 0.
+      const pa = a.legal===0 ? 0 : 1;
+      const pb = b.legal===0 ? 0 : 1;
+      if(pa!==pb) return pa-pb;
+      // Luego, menor porcentaje resultante primero.
+      if(a.current!==b.current) return a.current-b.current;
+      // Desempate por guarnición.
+      return a.g.localeCompare(b.g,'es');
+    });
+    const downs=changes.filter(c=>c.current<c.legal).sort((a,b)=>{
+      // 1º: quienes ENTRAN a Zona 0.
+      const pa = a.current===0 ? 0 : 1;
+      const pb = b.current===0 ? 0 : 1;
+      if(pa!==pb) return pa-pb;
+      // Luego, menor porcentaje resultante primero.
+      if(a.current!==b.current) return a.current-b.current;
+      return a.g.localeCompare(b.g,'es');
+    });
     const upHtml=ups.length?`<div class="proposal-change-section">
-      <div class="proposal-change-label up">SUBEN %</div>
+      <div class="proposal-change-label up">SUBEN % <span class="proposal-order-note">· primero los que salen de 0%</span></div>
       ${ups.map(c=>`<div class="proposal-change up">
         <span class="g" title="${escapeAttr(c.g)}">${c.g}</span>
         <span class="v">${c.legal}% → ${c.current}%</span>
       </div>`).join('')}
     </div>`:'';
     const downHtml=downs.length?`<div class="proposal-change-section">
-      <div class="proposal-change-label down">BAJAN %</div>
+      <div class="proposal-change-label down">BAJAN % <span class="proposal-order-note">· primero los que pasan a 0%</span></div>
       ${downs.map(c=>`<div class="proposal-change down">
         <span class="g" title="${escapeAttr(c.g)}">${c.g}</span>
         <span class="v">${c.legal}% → ${c.current}%</span>
