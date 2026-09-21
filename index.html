@@ -471,6 +471,75 @@
 }
 </style>
 
+
+<style>
+/* Scroll real e independiente por Modo de Acción */
+#proposalsView{
+  overflow:hidden !important;
+  height:100vh !important;
+}
+#proposalsView .proposals-body{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  align-items:stretch !important;
+}
+#proposalsView .proposal-card{
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+  padding-bottom:24px !important;
+}
+#proposalsView .proposal-card::-webkit-scrollbar{width:9px;}
+#proposalsView .proposal-card::-webkit-scrollbar-track{background:#eef0f3;border-radius:8px;}
+#proposalsView .proposal-card::-webkit-scrollbar-thumb{background:#9ba4b3;border-radius:8px;}
+#proposalsView .proposal-card::-webkit-scrollbar-thumb:hover{background:#737e90;}
+
+/* Nada dentro de la propuesta puede volver a recortar la lista */
+#proposalsView .proposal-list,
+#proposalsView .proposal-changes,
+#proposalsView .proposal-change-list,
+#proposalsView .proposal-section{
+  max-height:none !important;
+  height:auto !important;
+  overflow:visible !important;
+}
+
+/* Encabezado de cada MA permanece visible mientras se recorre su contenido */
+#proposalsView .proposal-card > .proposal-head,
+#proposalsView .proposal-card > .proposal-title{
+  position:sticky;
+  top:0;
+  z-index:4;
+  background:#fff;
+}
+
+/* Impresión: contenido completo, sin scroll ni recorte */
+@media print{
+  #proposalsView{
+    position:static !important;
+    height:auto !important;
+    overflow:visible !important;
+  }
+  #proposalsView .proposals-body{
+    display:block !important;
+    overflow:visible !important;
+    height:auto !important;
+  }
+  #proposalsView .proposal-card{
+    height:auto !important;
+    max-height:none !important;
+    overflow:visible !important;
+    break-inside:avoid-page;
+    margin-bottom:8mm !important;
+  }
+}
+</style>
+
 </head>
 <body>
 
