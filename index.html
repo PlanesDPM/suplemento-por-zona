@@ -826,6 +826,28 @@
 }
 </style>
 
+
+<style id="new-variant-flow-css">
+#saveVariantTopBtn{background:#243a5a;color:#fff;border-color:#243a5a;font-weight:800;}
+.save-variant-slots{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 16px;}
+.save-variant-slot{display:flex;align-items:center;gap:10px;border:1px solid #d9dee7;border-radius:12px;padding:12px;cursor:pointer;background:#fff;}
+.save-variant-slot:hover{border-color:#7e8da5;background:#f7f9fc;}
+.save-variant-slot.used{background:#fbf8f1;}
+.save-variant-slot input{width:18px;height:18px;}
+.save-variant-slot-main{display:flex;flex-direction:column;gap:3px;}
+.save-variant-slot-main strong{font-size:14px;letter-spacing:.03em;}
+.save-variant-slot-main small{font-size:12px;color:#667085;}
+.save-variant-title-box{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.save-variant-title-box label{font-size:13px;font-weight:700;color:#344054;}
+.save-variant-title-input{width:100%;box-sizing:border-box;border:1px solid #cfd6e1;border-radius:9px;padding:10px 12px;font:inherit;font-size:14px;}
+.save-variant-warning{margin-top:12px;padding:10px 12px;border-radius:9px;background:#fff4e5;border:1px solid #f0c36d;color:#7a4d00;font-size:13px;}
+.variant-main{min-width:140px;}
+.variant-main .variant-short-title{display:block;margin-top:3px;max-width:155px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:500;opacity:.82;}
+.variant-main:disabled{cursor:default;opacity:.52;}
+.variant-main.active-variant{outline:3px solid rgba(36,58,90,.18);border-color:#243a5a!important;}
+@media(max-width:720px){.save-variant-slots{grid-template-columns:1fr;}}
+</style>
+
 </head>
 <body>
 
@@ -875,6 +897,7 @@
       <div>
         <label>&nbsp;</label>
         <button class="btn secondary" id="fullscreenBtn">Pantalla completa</button>
+        <button class="btn" id="saveVariantTopBtn">Guardar VARIANTE</button>
         <button class="btn" id="proposalsBtn">Ver propuestas</button>
       </div>
     </div>
@@ -1336,10 +1359,10 @@ function variantHeatStyles(){
   return styles;
 }
 function variantLabel(slot){
-  return slot===0 ? 'SITUACIÓN ACTUAL' : `VARIANTE ${slot+1}`;
+  return `VARIANTE ${slot+1}`;
 }
 function variantPresentationTitle(variant,slot){
-  return (variant?.title || '').trim() || (slot===0 ? 'Situación Actual' : `Variante ${slot+1}`);
+  return (variant?.title || '').trim() || `Variante ${slot+1}`;
 }
 function currentVariantSnapshot(existing=null){
   return {
@@ -1354,10 +1377,80 @@ function currentVariantSnapshot(existing=null){
 function saveWorkspaceToVariant(slot){
   if(slot<0 || slot>=variants.length) return;
   variants[slot]=currentVariantSnapshot(variants[slot]);
-  if(slot===0 && !variants[slot].title) variants[slot].title='Situación Actual';
   saveVariants();
   renderVariants();
 }
+
+function openSaveVariantModal(){
+  const cards=variants.map((v,i)=>`
+    <label class="save-variant-slot ${v?'used':''}">
+      <input type="radio" name="saveVariantSlot" value="${i}">
+      <span class="save-variant-slot-main">
+        <strong>VARIANTE ${i+1}</strong>
+        <small>${v ? `Usada · ${escapeHtml(v.title || 'Sin título')}` : 'Disponible'}</small>
+      </span>
+    </label>`).join('');
+
+  openProModal({
+    title:'Guardar VARIANTE',
+    body:`
+      <div class="pro-message" style="margin-bottom:14px;">
+        Seleccione una variante y escriba un título breve para identificarla.
+      </div>
+      <div class="save-variant-slots">${cards}</div>
+      <div class="save-variant-title-box">
+        <label for="saveVariantTitleInput">Título de la variante</label>
+        <input id="saveVariantTitleInput" class="save-variant-title-input" type="text"
+          maxlength="80" placeholder="Ej.: Zona 0 CBA y NOE">
+      </div>
+      <div id="saveVariantOverwriteNote" class="save-variant-warning" style="display:none;"></div>`,
+    actions:[
+      {label:'Cancelar',className:'btn secondary',value:false},
+      {label:'Guardar',className:'btn',onClick:async()=>{
+        const checked=document.querySelector('input[name="saveVariantSlot"]:checked');
+        if(!checked){ await proMessage('Guardar VARIANTE','Seleccione VARIANTE 1, 2, 3 o 4.'); return; }
+        const slot=Number(checked.value);
+        const title=(document.getElementById('saveVariantTitleInput')?.value||'').trim();
+        if(!title){ await proMessage('Guardar VARIANTE','Escriba un título breve para identificar la variante.'); return; }
+
+        if(variants[slot]){
+          const ok=await proConfirm(
+            `Sobrescribir VARIANTE ${slot+1}`,
+            `La VARIANTE ${slot+1} ya está usada como <strong>${escapeHtml(variants[slot].title || 'Sin título')}</strong>.<br><br>Si continúa, se reemplazarán sus porcentajes, refrigerio y título.`,
+            'Sobrescribir'
+          );
+          if(!ok) return;
+        }
+        variants[slot]=currentVariantSnapshot(null);
+        variants[slot].title=title;
+        saveVariants();
+        activeVariantSlot=slot;
+        closeProModal(true);
+        renderVariants();
+      }}
+    ]
+  });
+
+  setTimeout(()=>{
+    const titleInput=document.getElementById('saveVariantTitleInput');
+    const note=document.getElementById('saveVariantOverwriteNote');
+    document.querySelectorAll('input[name="saveVariantSlot"]').forEach(r=>{
+      r.addEventListener('change',()=>{
+        const slot=Number(r.value), v=variants[slot];
+        if(v){
+          note.style.display='block';
+          note.innerHTML=`La <strong>VARIANTE ${slot+1}</strong> ya está usada. Al guardar se pedirá confirmación para sobrescribirla.`;
+          titleInput.value=v.title || '';
+        }else{
+          note.style.display='none';
+          note.innerHTML='';
+          titleInput.value='';
+        }
+      });
+    });
+  },0);
+}
+
 function normalizedWorkspaceState(pcts, enabled, days, selected){
   const pp={};
   for(const g of guarniciones){
@@ -1449,7 +1542,7 @@ function openVariantModal(slot){
     </div>
     <div class="variant-detail">${rows}</div>`,
     actions:[
-      {label:'Eliminar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Eliminar ${variantLabel(slot)}`,'La variante guardada será eliminada.','Eliminar')){if(slot===0){await proMessage('Situación Actual','La Situación Actual es la referencia legal del sistema y no puede eliminarse.');return;} variants[slot]=null;if(activeVariantSlot===slot)activeVariantSlot=null;saveVariants();renderVariants();}}},
+      {label:'Eliminar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Eliminar ${variantLabel(slot)}`,'La variante guardada será eliminada.','Eliminar')){variants[slot]=null;if(activeVariantSlot===slot)activeVariantSlot=null;saveVariants();renderVariants();}}},
       {label:'Actualizar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Actualizar ${variantLabel(slot)}`,'Se reemplazarán sus valores por los porcentajes actualmente visibles.','Actualizar')){saveWorkspaceToVariant(slot);activeVariantSlot=slot;}}},
       {label:'Aplicar variante',className:'btn',onClick:()=>applyVariantSlot(slot)}
     ]});
@@ -1621,20 +1714,19 @@ function loadLocalState(){
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
     const savedVariants = JSON.parse(localStorage.getItem(LS_VARIANTS) || '[]');
     variants = Array.from({length:4},(_,i)=>savedVariants[i] || null);
-    // Desde esta versión, el MMAA 1 es la referencia fija: ley vigente + refrigerio en CABA.
-    if(localStorage.getItem(LS_VARIANT_SCHEMA)!=='v3'){
-      const legalPcts={};
-      for(const g of guarniciones) legalPcts[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);
-      variants[0]={pcts:legalPcts,refrigerioEnabled:true,refrigerioDays:23,refrigerioGuarniciones:{'CABA':true},title:'Situación Actual',savedAt:new Date().toISOString()};
-      localStorage.setItem(LS_VARIANT_SCHEMA,'v3');
-      localStorage.setItem(LS_VARIANTS,JSON.stringify(variants));
-    } else if(variants[0]){
-      variants[0].title=variants[0].title || 'Situación Actual';
-    }
     const savedRefrig=JSON.parse(localStorage.getItem(LS_REFRIG)||'{}');
     refrigerioEnabled=!!savedRefrig.enabled;
     refrigerioDays=Math.max(0,Math.min(31,parseInt(savedRefrig.days??23,10)||0));
     refrigerioGuarniciones=savedRefrig.selected && typeof savedRefrig.selected==='object' ? savedRefrig.selected : {};
+
+    if(localStorage.getItem('ezz_variant_flow_v4')!=='1'){
+      for(const g of guarniciones) pctMatrix[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);
+      refrigerioEnabled=true;
+      refrigerioDays=23;
+      refrigerioGuarniciones={'CABA':true};
+      activeVariantSlot=null;
+      localStorage.setItem('ezz_variant_flow_v4','1');
+    }
   } catch(e) {
     pctMatrix = {}; gradoMap = {}; variants = [null,null,null,null]; refrigerioEnabled=false; refrigerioDays=23; refrigerioGuarniciones={};
     for (const g of guarniciones) pctMatrix[g] = DEFAULT_PCT[normalize(g)] !== undefined ? DEFAULT_PCT[normalize(g)] : 0;
@@ -1937,13 +2029,16 @@ function renderVariants(){
   const grid=document.getElementById('variantsGrid');
   grid.innerHTML=variants.map((variant,index)=>{
     const active=index===activeVariantSlot?' active-variant':'';
+    const title=variant ? escapeHtml(variant.title || 'Sin título') : 'Sin guardar';
     return `<div class="variant-card">
-      <button class="variant-main ${variant?'':'empty'}${active}" data-slot="${index}">
-        <strong>${variantLabel(index)}</strong>
+      <button class="variant-main ${variant?'':'empty'}${active}" data-slot="${index}" ${variant?'':'disabled'}>
+        <strong>VARIANTE ${index+1}</strong>
+        <span class="variant-short-title">${title}</span>
       </button>
     </div>`;
   }).join('');
-  grid.querySelectorAll('.variant-main').forEach(btn=>btn.addEventListener('click',()=>openVariantModal(Number(btn.dataset.slot))));
+  grid.querySelectorAll('.variant-main[data-slot]:not(:disabled)').forEach(btn=>
+    btn.addEventListener('click',()=>applyVariantSlot(Number(btn.dataset.slot))));
 }
 
 /* ==================== RENDER: gráfico por guarnición ==================== */
@@ -2297,6 +2392,7 @@ function closeProposals(){
   const view=document.getElementById('proposalsView');
   view.classList.remove('show');view.setAttribute('aria-hidden','true');
 }
+document.getElementById('saveVariantTopBtn').addEventListener('click',openSaveVariantModal);
 document.getElementById('proposalsBtn').addEventListener('click',openProposals);
 document.getElementById('printProposalsBtn').addEventListener('click',()=>window.print());
 document.getElementById('closeProposalsBtn').addEventListener('click',closeProposals);
