@@ -811,6 +811,19 @@
     margin-bottom:4mm !important;
   }
 }
+
+/* Variante activa y títulos editables de la presentación */
+.variant-main.active-variant{outline:2px solid #315f4b;outline-offset:2px;}
+#proposalsView .proposal-editable-title{
+  min-width:0;cursor:text;border:1px dashed transparent;border-radius:6px;padding:3px 6px;margin:-3px -6px;
+}
+#proposalsView .proposal-editable-title:hover,#proposalsView .proposal-editable-title:focus{
+  border-color:#9ba4b3;background:#f7f8fa;outline:none;
+}
+@media print{
+  #proposalsView .proposal-editable-title{border-color:transparent!important;background:transparent!important;}
+  #proposalsView .proposal-rank{display:none!important;}
+}
 </style>
 
 </head>
@@ -985,6 +998,7 @@ const GRADO_SOLDADO = 'Voluntario de Primera (VP)';
 const LS_PCT = 'ezz_pct_matrix_v2';
 const LS_MAP = 'ezz_grado_map_v1';
 const LS_VARIANTS = 'ezz_pct_variants_v1';
+const LS_VARIANT_SCHEMA = 'ezz_variant_schema_v3';
 const LS_REFRIG = 'ezz_refrigerio_v1';
 
 // Haberes básicos mensuales 2026. Fuente: tabla suministrada para esta herramienta.
@@ -1137,6 +1151,7 @@ let chart = null;
 let pctRenderTimer = null;
 let pctSort = { key:'guarnicion', dir:'asc' };
 let variants = [null,null,null,null];
+let activeVariantSlot = null;
 let matrixFilters = { zona:'', provincia:'', fuerza:'', guarnicion:'' };
 let refrigerioEnabled = false;
 let refrigerioDays = 23;
@@ -1201,6 +1216,7 @@ function clearStatus(){
   document.getElementById('status').className = '';
 }
 function escapeAttr(s){ return (s || '').toString().replace(/"/g,'&quot;'); }
+function escapeHtml(s){ return (s || '').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c])); }
 function gvizUrl(sheetId, tabName){
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
 }
@@ -1319,6 +1335,76 @@ function variantHeatStyles(){
   });
   return styles;
 }
+function variantLabel(slot){
+  return slot===0 ? 'SITUACIÓN ACTUAL' : `VARIANTE ${slot+1}`;
+}
+function variantPresentationTitle(variant,slot){
+  return (variant?.title || '').trim() || (slot===0 ? 'Situación Actual' : `Variante ${slot+1}`);
+}
+function currentVariantSnapshot(existing=null){
+  return {
+    pcts:{...pctMatrix},
+    refrigerioEnabled,
+    refrigerioDays,
+    refrigerioGuarniciones:{...refrigerioGuarniciones},
+    title:existing?.title || '',
+    savedAt:new Date().toISOString()
+  };
+}
+function saveWorkspaceToVariant(slot){
+  if(slot<0 || slot>=variants.length) return;
+  variants[slot]=currentVariantSnapshot(variants[slot]);
+  if(slot===0 && !variants[slot].title) variants[slot].title='Situación Actual';
+  saveVariants();
+  renderVariants();
+}
+function normalizedWorkspaceState(pcts, enabled, days, selected){
+  const pp={};
+  for(const g of guarniciones){
+    const legal=DEFAULT_PCT[normalize(g)]??0;
+    pp[g]=normalizePct(pcts?.[g]!==undefined?pcts[g]:legal);
+  }
+  const ss={};
+  for(const g of Object.keys(selected||{}).sort()) if(selected[g]) ss[g]=true;
+  return JSON.stringify({pcts:pp,refrigerioEnabled:!!enabled,refrigerioDays:Number(days)||0,refrigerioGuarniciones:ss});
+}
+function activeVariantHasUnsavedChanges(){
+  if(activeVariantSlot===null || !variants[activeVariantSlot]) return false;
+  const v=variants[activeVariantSlot];
+  return normalizedWorkspaceState(pctMatrix,refrigerioEnabled,refrigerioDays,refrigerioGuarniciones)!==
+    normalizedWorkspaceState(v.pcts,v.refrigerioEnabled,v.refrigerioDays,v.refrigerioGuarniciones);
+}
+function promptUnsavedVariant(slot){
+  return new Promise(resolve=>{
+    const label=variantLabel(slot);
+    openProModal({
+      title:'Cambios sin guardar',
+      body:`<div class="pro-message">Se realizaron cambios en <strong>${label}</strong> que todavía no fueron guardados.<br><br>¿Desea guardar los cambios antes de pasar a otra variante?</div>`,
+      actions:[
+        {label:'Cancelar',className:'btn secondary',onClick:()=>{closeProModal(false);resolve('cancel');}},
+        {label:'Continuar sin guardar',className:'btn secondary',onClick:()=>{closeProModal(false);resolve('discard');}},
+        {label:'Guardar cambios',className:'btn',onClick:()=>{saveWorkspaceToVariant(slot);closeProModal(true);resolve('save');}}
+      ]
+    });
+  });
+}
+async function applyVariantSlot(slot){
+  const variant=variants[slot];
+  if(!variant) return;
+  if(activeVariantSlot!==null && activeVariantSlot!==slot && activeVariantHasUnsavedChanges()){
+    const decision=await promptUnsavedVariant(activeVariantSlot);
+    if(decision==='cancel') return;
+  }
+  for(const g of guarniciones){
+    const legal=DEFAULT_PCT[normalize(g)]??0;
+    pctMatrix[g]=normalizePct(variant.pcts[g]!==undefined?variant.pcts[g]:legal);
+  }
+  refrigerioEnabled=!!variant.refrigerioEnabled;
+  refrigerioDays=Math.max(0,Math.min(31,parseInt(variant.refrigerioDays??23,10)||0));
+  refrigerioGuarniciones={...(variant.refrigerioGuarniciones||{})};
+  activeVariantSlot=slot;
+  savePct();saveRefrigerio();computeAll();closeProModal(true);renderAll();updateRefrigerioUI();renderVariants();
+}
 function moveVariant(slot, direction){
   const target=slot+direction;
   if(target<0 || target>=variants.length) return;
@@ -1339,9 +1425,9 @@ function openVariantModal(slot){
     </div>`;
 
   if(!variant){
-    openProModal({title:`VARIANTE ${slot+1}`,body:`${moveActions}<div class="pro-message" style="margin-top:16px;">Este espacio todavía no tiene una variante guardada.</div>`,
+    openProModal({title:variantLabel(slot),body:`${moveActions}<div class="pro-message" style="margin-top:16px;">Este espacio todavía no tiene una variante guardada.</div>`,
       actions:[{label:'Cerrar',className:'btn secondary',value:false},{label:'Guardar valores actuales',className:'btn',onClick:()=>{
-        variants[slot]={pcts:{...pctMatrix},refrigerioEnabled,refrigerioDays,refrigerioGuarniciones:{...refrigerioGuarniciones},savedAt:new Date().toISOString()};saveVariants();closeProModal(true);renderVariants();
+        saveWorkspaceToVariant(slot);activeVariantSlot=slot;closeProModal(true);renderVariants();
       }}]});
     setTimeout(()=>{
       document.getElementById('moveVariantLeft')?.addEventListener('click',()=>moveVariant(slot,-1));
@@ -1352,7 +1438,7 @@ function openVariantModal(slot){
   const m=metricsForPcts(variant.pcts,variant), changes=variantChanges(variant.pcts);
   const rows=changes.length?changes.map(x=>`<div class="variant-detail-row"><span>${x}</span></div>`).join(''):
     `<div class="pro-message">Sin cambios respecto de los porcentajes legales.</div>`;
-  openProModal({title:`VARIANTE ${slot+1}`,body:`
+  openProModal({title:variantLabel(slot),body:`
     ${moveActions}
     <div class="variant-metrics" style="margin-top:16px;">
       <div class="variant-metric"><div class="vm-label">Diferencia mensual respecto de valores legales</div><div class="vm-value">${signedMoney(m.diff)}</div></div>
@@ -1363,11 +1449,9 @@ function openVariantModal(slot){
     </div>
     <div class="variant-detail">${rows}</div>`,
     actions:[
-      {label:'Eliminar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Eliminar VARIANTE ${slot+1}`,'La variante guardada será eliminada.','Eliminar')){variants[slot]=null;saveVariants();renderVariants();}}},
-      {label:'Actualizar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Actualizar VARIANTE ${slot+1}`,'Se reemplazarán sus valores por los porcentajes actualmente visibles.','Actualizar')){variants[slot]={pcts:{...pctMatrix},refrigerioEnabled,refrigerioDays,refrigerioGuarniciones:{...refrigerioGuarniciones},savedAt:new Date().toISOString()};saveVariants();renderVariants();}}},
-      {label:'Aplicar variante',className:'btn',onClick:()=>{for(const g of guarniciones){const legal=DEFAULT_PCT[normalize(g)]??0;pctMatrix[g]=normalizePct(variant.pcts[g]!==undefined?variant.pcts[g]:legal);}
-        refrigerioEnabled=!!variant.refrigerioEnabled;refrigerioDays=Math.max(0,Math.min(31,parseInt(variant.refrigerioDays??23,10)||0));
-        refrigerioGuarniciones={...(variant.refrigerioGuarniciones||{})};savePct();saveRefrigerio();computeAll();closeProModal(true);renderAll();updateRefrigerioUI();}}
+      {label:'Eliminar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Eliminar ${variantLabel(slot)}`,'La variante guardada será eliminada.','Eliminar')){if(slot===0){await proMessage('Situación Actual','La Situación Actual es la referencia legal del sistema y no puede eliminarse.');return;} variants[slot]=null;if(activeVariantSlot===slot)activeVariantSlot=null;saveVariants();renderVariants();}}},
+      {label:'Actualizar',className:'btn secondary',onClick:async()=>{closeProModal(false);if(await proConfirm(`Actualizar ${variantLabel(slot)}`,'Se reemplazarán sus valores por los porcentajes actualmente visibles.','Actualizar')){saveWorkspaceToVariant(slot);activeVariantSlot=slot;}}},
+      {label:'Aplicar variante',className:'btn',onClick:()=>applyVariantSlot(slot)}
     ]});
   setTimeout(()=>{
     document.getElementById('moveVariantLeft')?.addEventListener('click',()=>moveVariant(slot,-1));
@@ -1537,6 +1621,16 @@ function loadLocalState(){
     gradoMap = JSON.parse(localStorage.getItem(LS_MAP) || '{}');
     const savedVariants = JSON.parse(localStorage.getItem(LS_VARIANTS) || '[]');
     variants = Array.from({length:4},(_,i)=>savedVariants[i] || null);
+    // Desde esta versión, el MMAA 1 es la referencia fija: ley vigente + refrigerio en CABA.
+    if(localStorage.getItem(LS_VARIANT_SCHEMA)!=='v3'){
+      const legalPcts={};
+      for(const g of guarniciones) legalPcts[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);
+      variants[0]={pcts:legalPcts,refrigerioEnabled:true,refrigerioDays:23,refrigerioGuarniciones:{'CABA':true},title:'Situación Actual',savedAt:new Date().toISOString()};
+      localStorage.setItem(LS_VARIANT_SCHEMA,'v3');
+      localStorage.setItem(LS_VARIANTS,JSON.stringify(variants));
+    } else if(variants[0]){
+      variants[0].title=variants[0].title || 'Situación Actual';
+    }
     const savedRefrig=JSON.parse(localStorage.getItem(LS_REFRIG)||'{}');
     refrigerioEnabled=!!savedRefrig.enabled;
     refrigerioDays=Math.max(0,Math.min(31,parseInt(savedRefrig.days??23,10)||0));
@@ -1842,9 +1936,10 @@ function variantChanges(pcts){
 function renderVariants(){
   const grid=document.getElementById('variantsGrid');
   grid.innerHTML=variants.map((variant,index)=>{
+    const active=index===activeVariantSlot?' active-variant':'';
     return `<div class="variant-card">
-      <button class="variant-main ${variant?'':'empty'}" data-slot="${index}">
-        <strong>VARIANTE ${index+1}</strong>
+      <button class="variant-main ${variant?'':'empty'}${active}" data-slot="${index}">
+        <strong>${variantLabel(index)}</strong>
       </button>
     </div>`;
   }).join('');
@@ -2161,7 +2256,7 @@ function renderProposals(){
     const list=changes.length?(upHtml+downHtml):`<div class="proposal-empty">Sin cambios respecto de los valores legales</div>`;
     const more='';
     return `<article class="proposal-card">
-      <div class="proposal-head"><h3>VARIANTE ${index+1}</h3><span class="proposal-rank">Posición ${position+1}</span></div>
+      <div class="proposal-head"><h3 class="proposal-editable-title" contenteditable="true" spellcheck="false" data-slot="${index}" title="Haga clic para editar el título">${escapeHtml(variantPresentationTitle(variant,index))}</h3><span class="proposal-rank">Título editable</span></div>
       <div class="proposal-metrics">
         <div class="proposal-metric"><div class="label">Total Mensual</div><div class="value">${money(m.total)}</div></div>
         <div class="proposal-metric"><div class="label">Diferencia con Ajustes</div><div class="value">${signedMoney(m.diff)}</div></div>
@@ -2181,6 +2276,17 @@ function renderProposals(){
       </div>
     </article>`;
   }).join('');
+  body.querySelectorAll('.proposal-editable-title').forEach(el=>{
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();}});
+    el.addEventListener('blur',()=>{
+      const slot=Number(el.dataset.slot);
+      if(!variants[slot]) return;
+      const value=(el.textContent||'').trim();
+      variants[slot].title=value || (slot===0?'Situación Actual':`Variante ${slot+1}`);
+      el.textContent=variants[slot].title;
+      saveVariants();
+    });
+  });
 }
 function openProposals(){
   renderProposals();
