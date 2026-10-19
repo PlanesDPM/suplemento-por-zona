@@ -2358,7 +2358,7 @@ function renderProposals(){
     </div>`:'';
     const unchanged=guarniciones.map(g=>{
       const legal=DEFAULT_PCT[normalize(g)]||0;
-      const current=normalizePct(v.pcts[g]!==undefined?v.pcts[g]:legal);
+      const current=normalizePct(variant.pcts[g]!==undefined?variant.pcts[g]:legal);
       return {g,legal,current};
     }).filter(c=>c.current===c.legal).sort((a,b)=>a.current-b.current||a.g.localeCompare(b.g,'es'));
     const sameHtml=`<div class="proposal-change-section">
