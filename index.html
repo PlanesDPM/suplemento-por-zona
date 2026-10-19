@@ -856,7 +856,14 @@
 #proposalsView .proposal-change.same{border-left:3px solid #94a3b8;}
 @media print{#proposalsView .proposal-combined-total{break-inside:avoid;page-break-inside:avoid;}}
 </style>
-</head>
+<style>
+#proposalsView .comparison-panel{margin:12px 18px;padding:16px;background:#fff;border:1px solid #cbd7e7;border-radius:10px;overflow:auto;max-height:80vh;flex:1;font-family:Arial,sans-serif}
+#proposalsView .comparison-panel[hidden]{display:none!important}
+#proposalsView:has(.comparison-panel:not([hidden])) .proposals-body{display:none}
+.comp-options{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}.comp-options label{border:1px solid #ccd7e5;border-radius:8px;padding:10px;background:#f6f9fd;cursor:pointer}.comp-options small{display:block;color:#556477;margin-left:20px}
+.comp-scroll{overflow:auto;margin-top:14px}.comp-table{width:100%;border-collapse:collapse;min-width:800px;text-align:center;font-size:14px}.comp-table th{background:#609bd1;color:white;padding:12px;border:2px solid white;font-size:16px}.comp-table td{padding:12px;border:2px solid white;background:#e4eaf4}.comp-table tr:nth-child(odd) td{background:#d2dfef}.comp-table td:first-child{font-weight:700;min-width:150px}.comp-more{color:#bb1421;font-weight:700}.comp-less{color:#147046;font-weight:700}.comp-total td{font-weight:800}
+@media print{#proposalsView .comparison-panel:not([hidden]){display:block!important;max-height:none;overflow:visible}.comp-options,.comp-controls{display:none!important}}
+</style></head>
 <body>
 
 
@@ -867,6 +874,7 @@
       <div id="proposalsMonth">Comparación de las cuatro variantes</div>
     </div>
     <div class="proposals-actions">
+      <button class="btn" id="comparisonBtn">Cuadro comparativo</button>
       <button class="btn secondary" id="printProposalsBtn">Imprimir propuestas</button>
       <button class="btn secondary" id="closeProposalsBtn">Volver al estudio</button>
     </div>
@@ -874,6 +882,7 @@
   <div style="font:14px Arial,sans-serif;color:var(--ink-soft);padding:0 18px 8px;">
       Se muestran todas las guarniciones que modifican su porcentaje. Desplácese verticalmente para consultar la propuesta completa.
     </div>
+    <div id="comparisonPanel" class="comparison-panel" hidden></div>
     <div class="proposals-body" id="proposalsBody"></div>
 </div>
 
@@ -2400,6 +2409,47 @@ function renderProposals(){
     });
   });
 }
+
+function compMoney(n){return money(Math.round(n||0));}
+function compCount(n){return Math.round(n||0).toLocaleString('es-AR');}
+function compDiff(a,b,moneyMode=false){const d=a-b;if(Math.abs(d)<0.5)return 'Sin cambios';return `<span class="${d>0?'comp-more':'comp-less'}">${moneyMode?compMoney(Math.abs(d)):compCount(Math.abs(d))} ${d>0?'Más':'Menos'}</span>`;}
+function compBaseline(){const pcts={};for(const g of guarniciones)pcts[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);return {pcts,refrigerioEnabled:true,refrigerioDays:23,refrigerioGuarniciones:{CABA:true},title:'Situación actual'};}
+function compData(v){
+ const m=metricsForPcts(v.pcts,v);
+ const zero=guarniciones.filter(g=>normalizePct(v.pcts[g]??DEFAULT_PCT[normalize(g)]??0)===0);
+ const zeroSet=new Set(zero);
+ const selected=Object.entries(v.refrigerioGuarniciones||{}).filter(([g,on])=>on&&zeroSet.has(g)&&v.refrigerioEnabled).map(([g])=>g);
+ const byG={};for(const p of personas)byG[p.guarnicion]=(byG[p.guarnicion]||0)+(p.count||1);
+ return {m,zero,selected,byG};
+}
+function compTable(indices){
+ const chosen=indices.filter(i=>variants[i]);if(!chosen.length)return '<p>Seleccioná al menos una variante.</p>';
+ const cols=[{label:'Situación actual',v:compBaseline()},...chosen.map(i=>({label:`Variante ${i+1} — ${escapeHtml(variants[i].title||'Sin título')}`,v:variants[i]}))];
+ const d=cols.map(c=>compData(c.v));const showObs=chosen.length===1;
+ const names=a=>a.length?a.map(escapeHtml).join(', '):'Ninguna';
+ const row=(label,fn,obs)=>`<tr><td>${label}</td>${d.map((x,i)=>`<td>${fn(x,i)}</td>`).join('')}${showObs?`<td>${obs?obs(d[1],d[0]):'—'}</td>`:''}</tr>`;
+ const zeroObs=(x,b)=>{const added=x.zero.filter(g=>!b.zero.includes(g)),removed=b.zero.filter(g=>!x.zero.includes(g));return [added.length?'Ingresan: '+names(added):'',removed.length?'Salen: '+names(removed):''].filter(Boolean).join('<br>')||'Sin cambios';};
+ return `<div class="comp-scroll"><table class="comp-table"><thead><tr><th>Parámetros</th>${cols.map(c=>`<th>${c.label}</th>`).join('')}${showObs?'<th>Obs</th>':''}</tr></thead><tbody>
+ ${row('Zona 0',x=>names(x.zero),zeroObs)}
+ ${row('Total de Personal en Zona 0',x=>compCount(x.m.zero),(x,b)=>compDiff(x.m.zero,b.m.zero))}
+ ${row('Personal con refrigerio',x=>`${x.selected.map(g=>`${escapeHtml(g)}: ${compCount(x.byG[g])}`).join('<br>')||'Ninguno'}<br><strong>Total: ${compCount(x.m.refrigerioPeople)}</strong>`,(x,b)=>compDiff(x.m.refrigerioPeople,b.m.refrigerioPeople))}
+ ${row('$ Refrigerio',x=>compMoney(x.m.refrigerioTotal),(x,b)=>compDiff(x.m.refrigerioTotal,b.m.refrigerioTotal,true))}
+ ${row('$ Zona',x=>compMoney(x.m.zoneTotal),(x,b)=>compDiff(x.m.zoneTotal,b.m.zoneTotal,true))}
+ ${row('Total Mensual<br>Zona + Refrigerio',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
+ </tbody></table></div>`;
+}
+function openComparison(){
+ const panel=document.getElementById('comparisonPanel');panel.hidden=false;
+ const saved=variants.map((v,i)=>({v,i})).filter(x=>x.v);
+ panel.innerHTML=`<h3 style="margin:0 0 8px">Cuadro comparativo</h3><p>Seleccioná las variantes para compararlas con la situación legal actual (refrigerio en CABA).</p>
+ <div class="comp-options">${saved.map(({v,i})=>`<label><input class="comp-choice" type="checkbox" value="${i}" ${saved.length===1?'checked':''}> Variante ${i+1}<small>${escapeHtml(v.title||'Sin título')}</small></label>`).join('')}</div>
+ <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compResult"></div>`;
+ panel.querySelector('#compGenerate').onclick=()=>{const ids=[...panel.querySelectorAll('.comp-choice:checked')].map(el=>Number(el.value));panel.querySelector('#compResult').innerHTML=compTable(ids);};
+ panel.querySelector('#compBack').onclick=()=>{panel.hidden=true;};
+ if(saved.length===1)panel.querySelector('#compGenerate').click();
+}
+document.getElementById('comparisonBtn').addEventListener('click',openComparison);
+
 function openProposals(){
   renderProposals();
   const view=document.getElementById('proposalsView');
