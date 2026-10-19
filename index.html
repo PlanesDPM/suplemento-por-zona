@@ -861,8 +861,13 @@
 #proposalsView .comparison-panel[hidden]{display:none!important}
 #proposalsView:has(.comparison-panel:not([hidden])) .proposals-body{display:none}
 .comp-options{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}.comp-options label{border:1px solid #ccd7e5;border-radius:8px;padding:10px;background:#f6f9fd;cursor:pointer}.comp-options small{display:block;color:#556477;margin-left:20px}
-.comp-scroll{overflow:auto;margin-top:14px}.comp-table{width:100%;border-collapse:collapse;min-width:800px;text-align:center;font-size:14px}.comp-table th{background:#609bd1;color:white;padding:12px;border:2px solid white;font-size:16px}.comp-table td{padding:12px;border:2px solid white;background:#e4eaf4}.comp-table tr:nth-child(odd) td{background:#d2dfef}.comp-table td:first-child{font-weight:700;min-width:150px}.comp-more{color:#bb1421;font-weight:700}.comp-less{color:#147046;font-weight:700}.comp-total td{font-weight:800}
+.comp-scroll{overflow-x:hidden;overflow-y:visible;margin-top:14px;width:100%}.comp-table{width:100%;border-collapse:collapse;min-width:0;table-layout:fixed;text-align:center;font-size:clamp(10px,1vw,14px)}.comp-table th{overflow-wrap:anywhere;background:#609bd1;color:white;padding:7px 5px;border:2px solid white;font-size:clamp(10px,1.1vw,15px)}.comp-table td{overflow-wrap:anywhere;word-break:normal;padding:7px 5px;border:2px solid white;background:#e4eaf4}.comp-table tr:nth-child(odd) td{background:#d2dfef}.comp-table td:first-child{font-weight:700;width:18%}.comp-more{color:#bb1421;font-weight:700}.comp-less{color:#147046;font-weight:700}.comp-total td{font-weight:800}
 @media print{#proposalsView .comparison-panel:not([hidden]){display:block!important;max-height:none;overflow:visible}.comp-options,.comp-controls{display:none!important}}
+<style id="comparison-a4-fit">
+#proposalsView .comparison-panel{overflow-x:hidden;min-width:0}
+#proposalsView .comp-table{width:100%;min-width:0!important;table-layout:fixed}
+#proposalsView .comp-table td,#proposalsView .comp-table th{overflow-wrap:anywhere;white-space:normal}
+@media(max-width:800px){#proposalsView .comparison-panel{padding:8px;margin:5px}#proposalsView .comp-table{font-size:10px}#proposalsView .comp-table td,#proposalsView .comp-table th{padding:4px 2px}}
 </style></head>
 <body>
 
@@ -2438,13 +2443,38 @@ function compTable(indices){
  ${row('Total Mensual<br>Zona + Refrigerio',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
  </tbody></table></div>`;
 }
+function printComparison(asPdf){
+ const result=document.getElementById('compResult');
+ if(!result || !result.querySelector('.comp-table')){
+   proMessage('Cuadro comparativo','Primero genere el cuadro con las variantes seleccionadas.');return;
+ }
+ const w=window.open('','_blank');
+ if(!w){proMessage('Impresión bloqueada','Habilite las ventanas emergentes para imprimir o guardar el PDF.');return;}
+ const table=result.querySelector('.comp-table').outerHTML;
+ const heading=asPdf?'Cuadro comparativo — Guardar como PDF':'Cuadro comparativo — Impresión';
+ w.document.open();w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${heading}</title><style>
+ @page{size:A4 landscape;margin:10mm}
+ *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#18263b;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ h1{font-size:16pt;margin:0 0 4mm}p{font-size:9pt;margin:0 0 5mm}
+ table{width:100%;table-layout:fixed;border-collapse:collapse;text-align:center;font-size:8.5pt}
+ th,td{border:1.5px solid white;padding:5px 4px;overflow-wrap:anywhere;vertical-align:middle}
+ th{background:#609bd1!important;color:white!important;font-size:10pt}
+ td{background:#e4eaf4!important}tr:nth-child(odd) td{background:#d2dfef!important}
+ td:first-child{width:18%;font-weight:bold}.comp-more{color:#bb1421;font-weight:bold}.comp-less{color:#147046;font-weight:bold}
+ tr{break-inside:avoid}thead{display:table-header-group}
+ .hint{display:none}@media screen{body{padding:20px}.hint{display:block;margin-bottom:12px;padding:10px;background:#fff4da}}
+ </style></head><body><div class="hint">${asPdf?'Para descargar: elegí «Guardar como PDF» como destino en la ventana de impresión.':'Elegí tu impresora en la ventana de impresión.'}</div><h1>Cuadro comparativo — Suplemento de Zona</h1><p>Situación actual y variantes seleccionadas</p>${table}</body></html>`);
+ w.document.close();w.focus();setTimeout(()=>w.print(),250);
+}
 function openComparison(){
  const panel=document.getElementById('comparisonPanel');panel.hidden=false;
  const saved=variants.map((v,i)=>({v,i})).filter(x=>x.v);
  panel.innerHTML=`<h3 style="margin:0 0 8px">Cuadro comparativo</h3><p>Seleccioná las variantes para compararlas con la situación legal actual (refrigerio en CABA).</p>
  <div class="comp-options">${saved.map(({v,i})=>`<label><input class="comp-choice" type="checkbox" value="${i}" ${saved.length===1?'checked':''}> Variante ${i+1}<small>${escapeHtml(v.title||'Sin título')}</small></label>`).join('')}</div>
- <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compResult"></div>`;
+ <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compPrint">Imprimir cuadro</button> <button class="btn secondary" id="compPdf">Descargar PDF</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compResult"></div>`;
  panel.querySelector('#compGenerate').onclick=()=>{const ids=[...panel.querySelectorAll('.comp-choice:checked')].map(el=>Number(el.value));panel.querySelector('#compResult').innerHTML=compTable(ids);};
+ panel.querySelector('#compPrint').onclick=()=>printComparison(false);
+ panel.querySelector('#compPdf').onclick=()=>printComparison(true);
  panel.querySelector('#compBack').onclick=()=>{panel.hidden=true;};
  if(saved.length===1)panel.querySelector('#compGenerate').click();
 }
