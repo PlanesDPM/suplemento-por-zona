@@ -848,6 +848,14 @@
 @media(max-width:720px){.save-variant-slots{grid-template-columns:1fr;}}
 </style>
 
+<style>
+/* Presentación: total combinado en cuadro independiente y porcentaje sin cambios */
+#proposalsView .proposal-combined-total{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;margin:10px 0;border:1px solid var(--line);border-radius:10px;background:#edf4f8;font:700 14px Arial,sans-serif;}
+#proposalsView .proposal-combined-total strong{font-size:16px;white-space:nowrap;}
+#proposalsView .proposal-change-label.same{background:#edf0f3;color:#334155;}
+#proposalsView .proposal-change.same{border-left:3px solid #94a3b8;}
+@media print{#proposalsView .proposal-combined-total{break-inside:avoid;page-break-inside:avoid;}}
+</style>
 </head>
 <body>
 
@@ -2348,14 +2356,23 @@ function renderProposals(){
         <span class="v">${c.legal}% → ${c.current}%</span>
       </div>`).join('')}
     </div>`:'';
-    const list=changes.length?(upHtml+downHtml):`<div class="proposal-empty">Sin cambios respecto de los valores legales</div>`;
+    const unchanged=guarniciones.map(g=>{
+      const legal=DEFAULT_PCT[normalize(g)]||0;
+      const current=normalizePct(v.pcts[g]!==undefined?v.pcts[g]:legal);
+      return {g,legal,current};
+    }).filter(c=>c.current===c.legal).sort((a,b)=>a.current-b.current||a.g.localeCompare(b.g,'es'));
+    const sameHtml=`<div class="proposal-change-section">
+      <div class="proposal-change-label same">MANTIENEN % (${unchanged.length})</div>
+      ${unchanged.map(c=>`<div class="proposal-change same"><span class="g" title="${escapeAttr(c.g)}">${c.g}</span><span class="v">${c.current}%</span></div>`).join('')}
+    </div>`;
+    const list=upHtml+downHtml+sameHtml;
     const more='';
     return `<article class="proposal-card">
       <div class="proposal-head"><h3 class="proposal-editable-title" contenteditable="true" spellcheck="false" data-slot="${index}" title="Haga clic para editar el título">${escapeHtml(variantPresentationTitle(variant,index))}</h3><span class="proposal-rank">Título editable</span></div>
       <div class="proposal-metrics">
-        <div class="proposal-metric"><div class="label">Total Mensual</div><div class="value">${money(m.total)}</div></div>
+        <div class="proposal-metric"><div class="label">Total Mensual Suplemento de Zona</div><div class="value">${money(m.zoneTotal)}</div></div>
         <div class="proposal-metric"><div class="label">Diferencia con Ajustes</div><div class="value">${signedMoney(m.diff)}</div></div>
-        <div class="proposal-metric"><div class="label">Personal en zona 0%</div><div class="value">${m.zero.toLocaleString('es-AR')}</div></div>
+        <div class="proposal-metric"><div class="label">Total de Personal en Zona 0</div><div class="value">${m.zero.toLocaleString('es-AR')}</div></div>
         <div class="proposal-metric"><div class="label">Diferencia con Ajustes</div><div class="value">${signedPeople(m.zeroDiff)}</div></div>
       </div>
       <div class="proposal-refrig">
@@ -2363,8 +2380,8 @@ function renderProposals(){
         <div class="proposal-refrig-list">${m.refrigerioEnabled && m.refrigerioDetail.length
           ? m.refrigerioDetail.map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost)}</span></div>`).join('')
           : '<div><span>Sin gasto de refrigerio</span><span></span></div>'}</div>
-        <div class="proposal-refrig-head" style="margin-top:5px;padding-top:5px;border-top:1px solid var(--line);"><span>Zona + Refrigerio</span><span>${money(m.total)}</span></div>
       </div>
+      <div class="proposal-combined-total"><span>Zona + Refrigerio</span><strong>${money(m.total)}</strong></div>
       <div class="proposal-changes">
         <div class="proposal-changes-title">Cambios de porcentaje (${changes.length})</div>
         <div class="proposal-list">${list}${more}</div>
