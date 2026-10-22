@@ -1065,13 +1065,13 @@
       </div>
     </div>
     <div class="refrig-kpi">
-      <div class="label">Total Mensual Refrigerio</div>
+      <div class="label">Refrigerio · Promedio mensual anualizado (9/12)</div>
       <div class="value" id="refrigLiveTotal">$ 0</div>
       <div class="sub" id="refrigPeopleTotal">0 personas</div>
     </div>
     <div class="refrig-grand-kpi">
       <div class="label">TOTAL GENERAL</div>
-      <div class="sub-label">Zona + Refrigerio + Contribuciones Patronales</div>
+      <div class="sub-label">Zona + Refrigerio promedio (9/12) + Contribuciones Patronales</div>
       <div class="value" id="refrigLiveCombined">$ 0</div>
     </div>
   </div>
@@ -1485,7 +1485,7 @@ function metricsForPcts(pcts, variant=null){
   const refrig=refrigerioMetrics(pcts,enabled,days,selected);
   const contrib=contribucionesZona(pcts), contribLegal=contribucionesZona(pctLegales());
   const total=zoneTotal+refrig.total+contrib.total;
-  return {total,zoneTotal,contribTotal:contrib.total,contribDiff:contrib.total-contribLegal.total,contribIAF:contrib.iafTotal,contribOSFA:contrib.osfa,contribDetail:contrib.iaf,refrigerioTotal:refrig.total,refrigerioPeople:refrig.people,refrigerioDetail:refrig.detail,
+  return {total,zoneTotal,contribTotal:contrib.total,contribDiff:contrib.total-contribLegal.total,contribIAF:contrib.iafTotal,contribOSFA:contrib.osfa,contribDetail:contrib.iaf,refrigerioTotal:refrig.total,refrigerioMesPago:refrig.monthlyPayment,refrigerioAnual:refrig.annualTotal,refrigerioPeople:refrig.people,refrigerioDetail:refrig.detail,
     refrigerioEnabled:enabled,refrigerioDays:days,legalTotal,diff:zoneTotal-legalTotal,zero,zeroLegal,zeroDiff:zero-zeroLegal};
 }
 function signedMoney(n){return (n>0?'+':n<0?'−':'')+money(Math.abs(n));}
@@ -1679,9 +1679,9 @@ function openVariantModal(slot){
     <div class="variant-metrics" style="margin-top:16px;">
       <div class="variant-metric"><div class="vm-label">Diferencia mensual respecto de valores legales</div><div class="vm-value">${signedMoney(m.diff)}</div></div>
       <div class="variant-metric"><div class="vm-label">Diferencia de personal sin suplemento</div><div class="vm-value">${signedPeople(m.zeroDiff)} personas</div></div>
-      <div class="variant-metric"><div class="vm-label">Gasto total Zona + Refrigerio + Contribuciones Patronales</div><div class="vm-value">${money(m.total)}</div></div>
+      <div class="variant-metric"><div class="vm-label">Gasto total Zona + Refrigerio promedio (9/12) + Contribuciones Patronales</div><div class="vm-value">${money(m.total)}</div></div>
       <div class="variant-metric"><div class="vm-label">Contribuciones Patronales (IAF + OSFA)</div><div class="vm-value">${money(m.contribTotal)}</div></div>
-      <div class="variant-metric"><div class="vm-label">Total mensual Refrigerio</div><div class="vm-value">${money(m.refrigerioTotal)}</div></div>
+      <div class="variant-metric"><div class="vm-label">Refrigerio · promedio mensual (9/12)</div><div class="vm-value">${money(m.refrigerioTotal)}</div></div>
       <div class="variant-metric"><div class="vm-label">Personal con suplemento 0 %</div><div class="vm-value">${m.zero.toLocaleString('es-AR')} personas</div></div>
     </div>
     <div class="variant-detail">${rows}</div>`,
@@ -1712,7 +1712,7 @@ function personalCountGuarnicion(g){
 }
 function refrigerioMetrics(pcts=pctMatrix, enabled=refrigerioEnabled, days=refrigerioDays, selected=refrigerioGuarniciones){
   let total=0, people=0; const detail=[];
-  if(!enabled) return {total,people,detail,unit:refrigerioUnitario(days)};
+  if(!enabled) return {total,monthlyPayment:0,annualTotal:0,people,detail,unit:refrigerioUnitario(days)};
   const unit=refrigerioUnitario(days);
   for(const g of guarniciones){
     const pct=normalizePct(pcts[g]!==undefined?pcts[g]:(DEFAULT_PCT[normalize(g)]||0));
@@ -1722,7 +1722,7 @@ function refrigerioMetrics(pcts=pctMatrix, enabled=refrigerioEnabled, days=refri
     const cost=unit*count;
     people+=count; total+=cost; detail.push({g,count,cost});
   }
-  return {total,people,detail,unit};
+  return {total:total*9/12,monthlyPayment:total,annualTotal:total*9,people,detail,unit};
 }
 function saveRefrigerio(){
   localStorage.setItem(LS_REFRIG,JSON.stringify({enabled:refrigerioEnabled,days:refrigerioDays,selected:refrigerioGuarniciones}));
@@ -2079,10 +2079,10 @@ function renderPctTable(){
   const patronalNow=contribucionesZona(), patronalLegal=contribucionesZona(pctLegales());
   html += `</tbody><tfoot>
     <tr><td colspan="6">Gasto de Zona</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr>
-    <tr class="refrig-summary-row"><td colspan="12">Total Mensual Refrigerio · ${refrigerioEnabled?'SI':'NO'} · ${refrigerioDays} días · ${refrigNow.people.toLocaleString('es-AR')} personas</td><td class="num">${money(refrigNow.total)}</td></tr>
+    <tr class="refrig-summary-row"><td colspan="12">Refrigerio promedio mensual (9/12) · ${refrigerioEnabled?'SI':'NO'} · ${refrigerioDays} días · ${refrigNow.people.toLocaleString('es-AR')} personas</td><td class="num">${money(refrigNow.total)}</td></tr>
     <tr class="refrig-summary-row"><td colspan="12">Total Contribuciones Patronales (IAF oficiales 36%, suboficiales 27%, soldados 16% + OSFA 8%)</td><td class="num">${money(patronalNow.total)}</td></tr>
     <tr class="refrig-summary-row"><td colspan="12">Diferencia con Ajustes — Contribuciones Patronales</td><td class="num">${signedMoney(patronalNow.total-patronalLegal.total)}</td></tr>
-    <tr class="refrig-total-row"><td colspan="12">GASTO TOTAL · ZONA + REFRIGERIO + CONTRIBUCIONES PATRONALES</td><td class="num">${money(grandTotal+refrigNow.total+patronalNow.total)}</td></tr>
+    <tr class="refrig-total-row"><td colspan="12">GASTO TOTAL · ZONA + REFRIGERIO PROMEDIO (9/12) + CONTRIBUCIONES PATRONALES</td><td class="num">${money(grandTotal+refrigNow.total+patronalNow.total)}</td></tr>
   </tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
@@ -2522,16 +2522,16 @@ function renderProposals(){
         <div class="proposal-metric"><div class="label">Diferencia con Ajustes</div><div class="value">${signedPeople(m.zeroDiff)}</div></div>
       </div>
       <div class="proposal-refrig">
-        <div class="proposal-refrig-head"><span>Refrigerio ${m.refrigerioEnabled?'SI':'NO'} · ${m.refrigerioDays} días</span><span>${money(m.refrigerioTotal)}</span></div>
-        <div class="proposal-refrig-list">${m.refrigerioEnabled && m.refrigerioDetail.length
-          ? m.refrigerioDetail.map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost)}</span></div>`).join('')
+        <div class="proposal-refrig-head"><span>Refrigerio promedio mensual (9/12) · ${m.refrigerioEnabled?'SI':'NO'} · ${m.refrigerioDays} días</span><span>${money(m.refrigerioTotal)}</span></div>
+        <div class="proposal-refrig-list"><div><span>Gasto anual (9 meses)</span><span>${money(m.refrigerioAnual)}</span></div>${m.refrigerioEnabled && m.refrigerioDetail.length
+          ? m.refrigerioDetail.map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost*9/12)}</span></div>`).join('')
           : '<div><span>Sin gasto de refrigerio</span><span></span></div>'}</div>
       </div>
       <div class="proposal-refrig patronal-propuesta">
         <div class="proposal-refrig-head"><span>Contribuciones Patronales</span><span>${money(m.contribTotal)}</span></div>
         <div class="proposal-refrig-list"><div><span>IAF — Oficiales 36%</span><span>${money(m.contribDetail.Oficial)}</span></div><div><span>IAF — Suboficiales 27%</span><span>${money(m.contribDetail.Suboficial)}</span></div><div><span>IAF — Soldados 16%</span><span>${money(m.contribDetail['Soldado Voluntario'])}</span></div><div><span>OSFA — Todos 8%</span><span>${money(m.contribOSFA)}</span></div><div><strong>Diferencia con ajustes</strong><strong>${signedMoney(m.contribDiff)}</strong></div></div>
       </div>
-      <div class="proposal-combined-total"><span>Zona + Refrigerio + Contribuciones Patronales</span><strong>${money(m.total)}</strong></div>
+      <div class="proposal-combined-total"><span>Zona + Refrigerio promedio (9/12) + Contribuciones Patronales</span><strong>${money(m.total)}</strong></div>
       <div class="proposal-changes">
         <div class="proposal-changes-title">Cambios de porcentaje (${changes.length})</div>
         <div class="proposal-list">${list}${more}</div>
@@ -2575,12 +2575,12 @@ function compTable(indices){
  ${row('Zona 0',x=>names(x.zero),zeroObs)}
  ${row('Total de Personal en Zona 0',x=>compCount(x.m.zero),(x,b)=>compDiff(x.m.zero,b.m.zero))}
  ${row('Personal con refrigerio',x=>`${x.selected.map(g=>`${escapeHtml(g)}: ${compCount(x.byG[g])}`).join('<br>')||'Ninguno'}<br><strong>Total: ${compCount(x.m.refrigerioPeople)}</strong>`,(x,b)=>compDiff(x.m.refrigerioPeople,b.m.refrigerioPeople))}
- ${row('$ Refrigerio',x=>`<strong>${compMoney(x.m.refrigerioTotal)}</strong>`,(x,b)=>compDiff(x.m.refrigerioTotal,b.m.refrigerioTotal,true))}
+ ${row('$ Refrigerio · promedio mensual (9/12)',x=>`<strong>${compMoney(x.m.refrigerioTotal)}</strong>`,(x,b)=>compDiff(x.m.refrigerioTotal,b.m.refrigerioTotal,true))}
  ${row('$ Zona',x=>`<strong>${compMoney(x.m.zoneTotal)}</strong>`,(x,b)=>compDiff(x.m.zoneTotal,b.m.zoneTotal,true))}
  ${row('$ Contribuciones Patronales — IAF',x=>compMoney(x.m.contribIAF),(x,b)=>compDiff(x.m.contribIAF,b.m.contribIAF,true))}
  ${row('$ Contribuciones Patronales — OSFA',x=>compMoney(x.m.contribOSFA),(x,b)=>compDiff(x.m.contribOSFA,b.m.contribOSFA,true))}
  ${row('$ Total Contribuciones Patronales',x=>`<strong>${compMoney(x.m.contribTotal)}</strong>`,(x,b)=>compDiff(x.m.contribTotal,b.m.contribTotal,true))}
- ${row('Total Mensual<br>Zona + Refrigerio + Contribuciones Patronales',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
+ ${row('Total Mensual<br>Zona + Refrigerio promedio (9/12) + Contribuciones Patronales',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
  ${row('Diferencia con Situación Actual — Personal en Zona 0', (x,i)=>compSigned(x.m.zero,d[0].m.zero), (x,b)=>compDiff(x.m.zero,b.m.zero))}
  ${row('Diferencia con Situación Actual — Costo mensual total', (x,i)=>compSigned(x.m.total,d[0].m.total,true), (x,b)=>compDiff(x.m.total,b.m.total,true))}
  </tbody></table></div>`;
