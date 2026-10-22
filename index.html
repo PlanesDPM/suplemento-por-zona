@@ -930,7 +930,7 @@
   <div id="status"></div>
 
   <div class="kpis" id="kpis" style="display:none;">
-    <div class="kpi"><div class="label">Total Mensual</div><div class="value" id="kpiTotal">—</div></div>
+    <div class="kpi"><div class="label">Total Mensual Suplemento de Zona</div><div class="value" id="kpiTotal">—</div></div>
     <div class="kpi"><div class="label">Diferencia con Ajustes</div><div class="value" id="kpiDiff">—</div></div>
     <div class="kpi"><div class="label">Personal en zona 0%</div><div class="value" id="kpiZero">—</div></div>
     <div class="kpi"><div class="label">Diferencia con Ajustes</div><div class="value" id="kpiZeroDiff">—</div></div>
@@ -967,9 +967,13 @@
     </div>
     <div class="refrig-grand-kpi">
       <div class="label">TOTAL GENERAL</div>
-      <div class="sub-label">Zona + Refrigerio</div>
+      <div class="sub-label">Zona + Refrigerio + Contribuciones Patronales</div>
       <div class="value" id="refrigLiveCombined">$ 0</div>
     </div>
+  </div>
+  <div class="kpis patronal-kpis" id="patronalKpis" style="display:none;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:-24px;margin-bottom:24px">
+    <div class="kpi"><div class="label">Total Contribuciones Patronales (IAF + OSFA)</div><div class="value" id="kpiPatronal">—</div></div>
+    <div class="kpi"><div class="label">Diferencia con Ajustes — Contribuciones Patronales</div><div class="value" id="kpiPatronalDiff">—</div></div>
   </div>
 
   <section class="two-col" id="mainGrid" style="display:none;">
@@ -1348,6 +1352,23 @@ document.getElementById('proModalClose').addEventListener('click',()=>closeProMo
 document.getElementById('proModalBackdrop').addEventListener('click',e=>{if(e.target.id==='proModalBackdrop')closeProModal(false);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('proModalBackdrop').classList.contains('show'))closeProModal(false);});
 
+// Contribuciones patronales: se calculan exclusivamente sobre Suplemento de Zona.
+const PATRONAL_IAF={Oficial:0.36,Suboficial:0.27,'Soldado Voluntario':0.16};
+const PATRONAL_OSFA=0.08;
+function contribucionesZona(pcts=null){
+  const iaf={Oficial:0,Suboficial:0,'Soldado Voluntario':0};
+  let osfa=0;
+  for(const p of personas){
+    const legal=DEFAULT_PCT[normalize(p.guarnicion)]||0;
+    const pct=pcts===null?normalizePct(p.pct):normalizePct(pcts[p.guarnicion]!==undefined?pcts[p.guarnicion]:legal);
+    const zona=(p.haber||0)*pct/100*(p.count||1);
+    iaf[p.tipo]=(iaf[p.tipo]||0)+zona*(PATRONAL_IAF[p.tipo]||0);
+    osfa+=zona*PATRONAL_OSFA;
+  }
+  const iafTotal=Object.values(iaf).reduce((a,b)=>a+b,0);
+  return {iaf,iafTotal,osfa,total:iafTotal+osfa};
+}
+function pctLegales(){const p={};for(const g of guarniciones)p[g]=DEFAULT_PCT[normalize(g)]||0;return p;}
 function metricsForPcts(pcts, variant=null){
   let zoneTotal=0,legalTotal=0,zero=0,zeroLegal=0;
   for(const p of personas){
@@ -1363,9 +1384,10 @@ function metricsForPcts(pcts, variant=null){
   const days=variant?.refrigerioDays??23;
   const selected=variant?.refrigerioGuarniciones||{};
   const refrig=refrigerioMetrics(pcts,enabled,days,selected);
-  const total=zoneTotal+refrig.total;
-  return {total,zoneTotal,refrigerioTotal:refrig.total,refrigerioPeople:refrig.people,refrigerioDetail:refrig.detail,
-    refrigerioEnabled:enabled,refrigerioDays:days,legalTotal,diff:total-legalTotal,zero,zeroLegal,zeroDiff:zero-zeroLegal};
+  const contrib=contribucionesZona(pcts), contribLegal=contribucionesZona(pctLegales());
+  const total=zoneTotal+refrig.total+contrib.total;
+  return {total,zoneTotal,contribTotal:contrib.total,contribDiff:contrib.total-contribLegal.total,contribIAF:contrib.iafTotal,contribOSFA:contrib.osfa,contribDetail:contrib.iaf,refrigerioTotal:refrig.total,refrigerioPeople:refrig.people,refrigerioDetail:refrig.detail,
+    refrigerioEnabled:enabled,refrigerioDays:days,legalTotal,diff:zoneTotal-legalTotal,zero,zeroLegal,zeroDiff:zero-zeroLegal};
 }
 function signedMoney(n){return (n>0?'+':n<0?'−':'')+money(Math.abs(n));}
 function signedPeople(n){return (n>0?'+':n<0?'−':'')+Math.abs(n).toLocaleString('es-AR');}
@@ -1558,7 +1580,8 @@ function openVariantModal(slot){
     <div class="variant-metrics" style="margin-top:16px;">
       <div class="variant-metric"><div class="vm-label">Diferencia mensual respecto de valores legales</div><div class="vm-value">${signedMoney(m.diff)}</div></div>
       <div class="variant-metric"><div class="vm-label">Diferencia de personal sin suplemento</div><div class="vm-value">${signedPeople(m.zeroDiff)} personas</div></div>
-      <div class="variant-metric"><div class="vm-label">Gasto total Zona + Refrigerio</div><div class="vm-value">${money(m.total)}</div></div>
+      <div class="variant-metric"><div class="vm-label">Gasto total Zona + Refrigerio + Contribuciones Patronales</div><div class="vm-value">${money(m.total)}</div></div>
+      <div class="variant-metric"><div class="vm-label">Contribuciones Patronales (IAF + OSFA)</div><div class="vm-value">${money(m.contribTotal)}</div></div>
       <div class="variant-metric"><div class="vm-label">Total mensual Refrigerio</div><div class="vm-value">${money(m.refrigerioTotal)}</div></div>
       <div class="variant-metric"><div class="vm-label">Personal con suplemento 0 %</div><div class="vm-value">${m.zero.toLocaleString('es-AR')} personas</div></div>
     </div>
@@ -1645,7 +1668,7 @@ function updateRefrigerioUI(){
   const zone=personas.reduce((s,p)=>s+(p.suplemento||0),0);
   const a=document.getElementById('refrigLiveTotal'),b=document.getElementById('refrigLiveCombined'),c=document.getElementById('refrigPeopleTotal');
   if(a)a.textContent=money(r.total);
-  if(b)b.textContent=money(zone+r.total);
+  if(b)b.textContent=money(zone+r.total+contribucionesZona().total);
   if(c)c.textContent=`${r.people.toLocaleString('es-AR')} personas con refrigerio`;
 }
 function refreshAfterRefrigerio(){
@@ -1657,6 +1680,7 @@ async function loadAll(){
   showLoading(); setLoadingProgress(6,'Inicializando sistema…');
   setStatus('Leyendo la planilla de personal…');
   document.getElementById('kpis').style.display = 'none';
+  document.getElementById('patronalKpis').style.display = 'none';
   document.getElementById('mainGrid').style.display = 'none';
 
   try {
@@ -1814,6 +1838,7 @@ function renderAll(){
   updateRefrigerioUI();
 
   document.getElementById('kpis').style.display = '';
+  document.getElementById('patronalKpis').style.display = ''; 
   document.getElementById('refrigToolbar').style.display = '';
   document.getElementById('mainGrid').style.display = '';
 }
@@ -1838,6 +1863,11 @@ function renderKPIs(){
   const totalPersonal = personas.reduce((s,p) => s + (p.count || 1), 0);
   const zeroPct = totalPersonal ? zeroCurrent / totalPersonal * 100 : 0;
 
+  const c=contribucionesZona(),cl=contribucionesZona(pctLegales());
+  document.getElementById('kpiPatronal').textContent=money(c.total);
+  const pd=c.total-cl.total;
+  document.getElementById('kpiPatronalDiff').textContent=signedMoney(pd);
+  document.getElementById('kpiPatronalDiff').className='value '+(pd<0?'diff-saving':pd>0?'diff-extra':'');
   document.getElementById('kpiTotal').innerHTML = money(total) + ' <small>/ mes</small>';
   const diffEl = document.getElementById('kpiDiff');
   const sign = diff > 0 ? '+' : diff < 0 ? '−' : '';
@@ -1947,10 +1977,13 @@ function renderPctTable(){
   const totalSubof = personas.filter(p=>p.tipo==='Suboficial').reduce((s,p)=>s+(p.count||1),0);
   const totalSold = personas.filter(p=>p.tipo==='Soldado Voluntario').reduce((s,p)=>s+(p.count||1),0);
   const refrigNow=refrigerioMetrics();
+  const patronalNow=contribucionesZona(), patronalLegal=contribucionesZona(pctLegales());
   html += `</tbody><tfoot>
     <tr><td colspan="6">Gasto de Zona</td><td class="num">${totalOf.toLocaleString('es-AR')}</td><td class="num">${totalSubof.toLocaleString('es-AR')}</td><td class="num">${totalSold.toLocaleString('es-AR')}</td><td class="num">${totalEfectivo.toLocaleString('es-AR')}</td><td class="num">100,0%</td><td class="num"></td><td></td><td class="num" id="pctGrandTotal">${money(grandTotal)}</td></tr>
     <tr class="refrig-summary-row"><td colspan="12">Total Mensual Refrigerio · ${refrigerioEnabled?'SI':'NO'} · ${refrigerioDays} días · ${refrigNow.people.toLocaleString('es-AR')} personas</td><td class="num">${money(refrigNow.total)}</td></tr>
-    <tr class="refrig-total-row"><td colspan="12">GASTO TOTAL · ZONA + REFRIGERIO</td><td class="num">${money(grandTotal+refrigNow.total)}</td></tr>
+    <tr class="refrig-summary-row"><td colspan="12">Total Contribuciones Patronales (IAF oficiales 36%, suboficiales 27%, soldados 16% + OSFA 8%)</td><td class="num">${money(patronalNow.total)}</td></tr>
+    <tr class="refrig-summary-row"><td colspan="12">Diferencia con Ajustes — Contribuciones Patronales</td><td class="num">${signedMoney(patronalNow.total-patronalLegal.total)}</td></tr>
+    <tr class="refrig-total-row"><td colspan="12">GASTO TOTAL · ZONA + REFRIGERIO + CONTRIBUCIONES PATRONALES</td><td class="num">${money(grandTotal+refrigNow.total+patronalNow.total)}</td></tr>
   </tfoot>`;
   document.getElementById('pctTable').innerHTML = html;
 
@@ -2395,7 +2428,11 @@ function renderProposals(){
           ? m.refrigerioDetail.map(x=>`<div><span>${x.g} · ${x.count.toLocaleString('es-AR')} pers.</span><span>${money(x.cost)}</span></div>`).join('')
           : '<div><span>Sin gasto de refrigerio</span><span></span></div>'}</div>
       </div>
-      <div class="proposal-combined-total"><span>Zona + Refrigerio</span><strong>${money(m.total)}</strong></div>
+      <div class="proposal-refrig patronal-propuesta">
+        <div class="proposal-refrig-head"><span>Contribuciones Patronales</span><span>${money(m.contribTotal)}</span></div>
+        <div class="proposal-refrig-list"><div><span>IAF — Oficiales 36%</span><span>${money(m.contribDetail.Oficial)}</span></div><div><span>IAF — Suboficiales 27%</span><span>${money(m.contribDetail.Suboficial)}</span></div><div><span>IAF — Soldados 16%</span><span>${money(m.contribDetail['Soldado Voluntario'])}</span></div><div><span>OSFA — Todos 8%</span><span>${money(m.contribOSFA)}</span></div><div><strong>Diferencia con ajustes</strong><strong>${signedMoney(m.contribDiff)}</strong></div></div>
+      </div>
+      <div class="proposal-combined-total"><span>Zona + Refrigerio + Contribuciones Patronales</span><strong>${money(m.total)}</strong></div>
       <div class="proposal-changes">
         <div class="proposal-changes-title">Cambios de porcentaje (${changes.length})</div>
         <div class="proposal-list">${list}${more}</div>
@@ -2440,7 +2477,10 @@ function compTable(indices){
  ${row('Personal con refrigerio',x=>`${x.selected.map(g=>`${escapeHtml(g)}: ${compCount(x.byG[g])}`).join('<br>')||'Ninguno'}<br><strong>Total: ${compCount(x.m.refrigerioPeople)}</strong>`,(x,b)=>compDiff(x.m.refrigerioPeople,b.m.refrigerioPeople))}
  ${row('$ Refrigerio',x=>compMoney(x.m.refrigerioTotal),(x,b)=>compDiff(x.m.refrigerioTotal,b.m.refrigerioTotal,true))}
  ${row('$ Zona',x=>compMoney(x.m.zoneTotal),(x,b)=>compDiff(x.m.zoneTotal,b.m.zoneTotal,true))}
- ${row('Total Mensual<br>Zona + Refrigerio',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
+ ${row('$ Contribuciones Patronales — IAF',x=>compMoney(x.m.contribIAF),(x,b)=>compDiff(x.m.contribIAF,b.m.contribIAF,true))}
+ ${row('$ Contribuciones Patronales — OSFA',x=>compMoney(x.m.contribOSFA),(x,b)=>compDiff(x.m.contribOSFA,b.m.contribOSFA,true))}
+ ${row('$ Total Contribuciones Patronales',x=>`<strong>${compMoney(x.m.contribTotal)}</strong>`,(x,b)=>compDiff(x.m.contribTotal,b.m.contribTotal,true))}
+ ${row('Total Mensual<br>Zona + Refrigerio + Contribuciones Patronales',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
  </tbody></table></div>`;
 }
 function printComparison(asPdf){
