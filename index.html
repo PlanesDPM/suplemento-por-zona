@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --navy:#182241; --navy-2:#233258; --gold:#c8a84b; --gold-2:#a8872f;
@@ -894,9 +895,45 @@
 #proposalsView .comp-table{width:100%;min-width:0!important;table-layout:fixed}
 #proposalsView .comp-table td,#proposalsView .comp-table th{overflow-wrap:anywhere;white-space:normal}
 @media(max-width:800px){#proposalsView .comparison-panel{padding:8px;margin:5px}#proposalsView .comp-table{font-size:10px}#proposalsView .comp-table td,#proposalsView .comp-table th{padding:4px 2px}}
-</style></head>
+</style>
+<style id="personal-zero-styles">
+#personalView{display:none;position:fixed;inset:0;z-index:9200;background:#f6f3ea;overflow:auto;font-family:Arial,sans-serif;color:#182241}
+#personalView.show{display:block}
+.personal-top{background:#182241;color:white;padding:17px 25px;display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap}
+.personal-top h2{color:#fff;font-family:Arial,sans-serif;font-size:22px}
+.personal-top p{margin:3px 0 0;color:#d5dce9;font-size:13px}
+.personal-content{padding:20px 28px 35px;max-width:1600px;margin:auto}
+.personal-controls{display:flex;flex-wrap:wrap;align-items:end;gap:15px;background:white;padding:15px;border:1px solid #ddd8c9;margin-bottom:16px}
+.personal-controls label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:700}
+.personal-controls select{min-width:240px;max-width:100%;background:white;color:#182241;border:1px solid #adb5c4;padding:9px;border-radius:4px}
+.personal-figures{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.personal-figure{background:white;padding:15px;border:1px solid #ddd8c9}.personal-figure span{font-size:12px;color:#536071;display:block}.personal-figure strong{font-size:25px;font-family:Arial,sans-serif}
+.personal-panel{background:white;border:1px solid #ddd8c9;padding:17px;margin-bottom:17px;min-width:0}
+.personal-panel h3{font:700 17px Arial,sans-serif;margin:0 0 5px;color:#182241}.personal-note{color:#687386;font-size:12px;margin:0 0 14px}
+.personal-chart-wrap{overflow-x:auto}.personal-chart-wrap canvas{width:100%;min-height:340px;max-height:380px}
+.personal-table-wrap{width:100%;overflow:auto;max-height:55vh}.personal-table{border-collapse:collapse;width:100%;font:12px Arial,sans-serif;white-space:nowrap}.personal-table th,.personal-table td{padding:9px 7px;border:1px solid #dce1e8;text-align:right}.personal-table th{background:#eaf0f7;color:#182241;position:sticky;top:0;z-index:1}.personal-table th:first-child,.personal-table td:first-child{text-align:left;position:sticky;left:0;background:white;z-index:2;min-width:180px}.personal-table th:first-child{background:#eaf0f7;z-index:3}.personal-table tfoot td{font-weight:bold;background:#e4ebf5}.personal-table tfoot td:first-child{background:#e4ebf5}
+@media(max-width:850px){.personal-figures{grid-template-columns:1fr}.personal-content{padding:12px}.personal-controls select{min-width:170px}}
+@media print{body:has(#personalView.show)>*:not(#personalView){display:none!important}#personalView.show{display:block!important;position:static;overflow:visible}#personalView .personal-top button,#personalView .personal-controls{display:none!important}#personalView .personal-content{padding:3mm}#personalView .personal-table-wrap{max-height:none;overflow:visible}#personalView .personal-table{font-size:8px}#personalView .personal-table th,#personalView .personal-table td{padding:3px}#personalView .personal-chart-wrap canvas{max-height:90mm}}
+</style>
+</head>
 <body>
 
+
+
+<div id="personalView" aria-hidden="true">
+  <div class="personal-top"><div><h2>Personal en Zona 0 % — por jerarquía y guarnición</h2><p>Distribución del personal afectado según la situación o variante seleccionada</p></div><button type="button" id="personalClose" class="btn secondary">Volver al estudio</button></div>
+  <div class="personal-content">
+    <div class="personal-controls">
+      <label>Situación / variante<select id="personalVariant"></select></label>
+      <label>Guarnición en Zona 0 %<select id="personalGarrison"></select></label>
+      <button class="btn" type="button" id="personalExcel">Descargar Excel</button>
+      <button class="btn secondary" type="button" id="personalPrint" style="background:#fff;color:#182241;border-color:#9ba5b7">Imprimir / Guardar como PDF</button>
+    </div>
+    <div class="personal-figures"><div class="personal-figure"><span>Total de personal en Zona 0 %</span><strong id="personalTotal">0</strong></div><div class="personal-figure"><span>Guarniciones en Zona 0 %</span><strong id="personalPlaces">0</strong></div><div class="personal-figure"><span>Personal en la selección del gráfico</span><strong id="personalSelected">0</strong></div></div>
+    <div class="personal-panel"><h3 id="personalChartTitle">Personal por jerarquía</h3><p class="personal-note">Columnas ordenadas de mayor a menor jerarquía. Las cantidades representan efectivos, no importes.</p><div class="personal-chart-wrap"><canvas id="personalChart" height="350"></canvas></div></div>
+    <div class="personal-panel"><h3>Distribución por guarnición y jerarquía</h3><p class="personal-note">Cada fila corresponde a una guarnición con Zona 0 %. Se incluyen los totales por grado y guarnición. Los grados sin personal se muestran en cero.</p><div class="personal-table-wrap"><table class="personal-table" id="personalTable"></table></div></div>
+  </div>
+</div>
 
 <div id="proposalsView" aria-hidden="true">
   <div class="proposals-top">
@@ -946,6 +983,7 @@
         <label>&nbsp;</label>
         <button class="btn secondary" id="fullscreenBtn">Pantalla completa</button>
         <button class="btn" id="saveVariantTopBtn">Guardar VARIANTE</button>
+        <button class="btn secondary" id="personalBtn" type="button">Personal</button>
         <button class="btn" id="proposalsBtn">Ver propuestas</button>
       </div>
     </div>
@@ -2561,6 +2599,99 @@ document.getElementById('proposalsBtn').addEventListener('click',openProposals);
 document.getElementById('printProposalsBtn').addEventListener('click',()=>window.print());
 document.getElementById('closeProposalsBtn').addEventListener('click',closeProposals);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('proposalsView').classList.contains('show'))closeProposals();});
+
+
+/* ==================== PERSONAL EN ZONA 0 % ==================== */
+let personalZeroChart=null;
+function personalCurrentPcts(){const result={};for(const g of guarniciones)result[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);return result;}
+function personalZeroPcts(selection){if(selection==='current')return personalCurrentPcts();if(selection==='working')return pctMatrix;const v=variants[Number(selection)];return v?.pcts||personalCurrentPcts();}
+function openPersonalView(){
+ const view=document.getElementById('personalView');view.classList.add('show');view.setAttribute('aria-hidden','false');
+ const select=document.getElementById('personalVariant');const prior=select.value||'current';
+ select.innerHTML='<option value="current">Situación actual (porcentajes originales)</option><option value="working">Estudio en pantalla (sin guardar)</option>'+variants.map((v,i)=>v?`<option value="${i}">Variante ${i+1} — ${escapeHtml(v.title||'Sin título')}</option>`:'').join('');
+ select.value=[...select.options].some(o=>o.value===prior)?prior:'current';renderPersonalZero();
+}
+function renderPersonalZero(){
+ const pcts=personalZeroPcts(document.getElementById('personalVariant').value);
+ const zeroGs=guarniciones.filter(g=>normalizePct(pcts[g]??DEFAULT_PCT[normalize(g)]??0)===0).sort((a,b)=>a.localeCompare(b,'es'));
+ const selector=document.getElementById('personalGarrison');const previous=selector.value;
+ selector.innerHTML='<option value="">Todas las guarniciones</option>'+zeroGs.map(g=>`<option value="${escapeAttr(g)}">${escapeHtml(g)}</option>`).join('');
+ selector.value=zeroGs.includes(previous)?previous:'';
+ renderPersonalZeroDetail(pcts,zeroGs);
+}
+function renderPersonalZeroDetail(pcts,zeroGs){
+ const selected=document.getElementById('personalGarrison').value;
+ const grades=[...GRADE_ORDER];const byG=new Map(zeroGs.map(g=>[g,Object.fromEntries(grades.map(x=>[x,0]))]));
+ const other=new Map();
+ for(const p of personas){
+   if(!byG.has(p.guarnicion))continue;
+   const code=gradoCode(p.grado)||p.grado||'Sin grado';
+   if(!grades.includes(code)){if(!other.has(code))other.set(code,1);}
+   const row=byG.get(p.guarnicion);row[code]=(row[code]||0)+(Number(p.count)||1);
+ }
+ for(const code of other.keys())grades.push(code);
+ const nfmt=x=>Math.round(x).toLocaleString('es-AR');
+ const gTotal=g=>Object.values(byG.get(g)||{}).reduce((a,b)=>a+b,0);
+ const allTotal=zeroGs.reduce((n,g)=>n+gTotal(g),0);
+ const chosenGs=selected?[selected]:zeroGs;
+ const selectedTotal=chosenGs.reduce((n,g)=>n+gTotal(g),0);
+ document.getElementById('personalTotal').textContent=nfmt(allTotal);
+ document.getElementById('personalPlaces').textContent=nfmt(zeroGs.length);
+ document.getElementById('personalSelected').textContent=nfmt(selectedTotal);
+ document.getElementById('personalChartTitle').textContent='Personal por jerarquía — '+(selected||'Todas las guarniciones en Zona 0 %');
+ const totals=grades.map(code=>chosenGs.reduce((sum,g)=>sum+(byG.get(g)?.[code]||0),0));
+ const table=document.getElementById('personalTable');
+ let html='<thead><tr><th>Guarnición</th>'+grades.map(g=>`<th>${escapeHtml(g)}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
+ for(const g of zeroGs){const row=byG.get(g);html+=`<tr><td>${escapeHtml(g)}</td>`+grades.map(c=>`<td>${nfmt(row[c]||0)}</td>`).join('')+`<td><strong>${nfmt(gTotal(g))}</strong></td></tr>`;}
+ html+='</tbody><tfoot><tr><td>TOTAL EN ZONA 0 %</td>'+grades.map(c=>`<td>${nfmt(zeroGs.reduce((sum,g)=>sum+(byG.get(g)?.[c]||0),0))}</td>`).join('')+`<td>${nfmt(allTotal)}</td></tr></tfoot>`;
+ table.innerHTML=html;
+ if(personalZeroChart){personalZeroChart.destroy();personalZeroChart=null;}
+ const canvas=document.getElementById('personalChart');
+ if(typeof Chart==='undefined'){canvas.insertAdjacentHTML('afterend','<p>No se pudo cargar la biblioteca de gráficos. La tabla contiene los datos.</p>');return;}
+ personalZeroChart=new Chart(canvas.getContext('2d'),{
+ type:'bar',data:{labels:grades,datasets:[{label:'Cantidad de efectivos',data:totals,backgroundColor:'#376694',borderColor:'#182241',borderWidth:1}]},
+ options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'Personal: '+nfmt(ctx.parsed.y)}}},scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{title:{display:true,text:'Jerarquía (de mayor a menor)'}}}}
+ });
+}
+document.getElementById('personalBtn').addEventListener('click',openPersonalView);
+document.getElementById('personalClose').addEventListener('click',()=>{const view=document.getElementById('personalView');view.classList.remove('show');view.setAttribute('aria-hidden','true');});
+document.getElementById('personalVariant').addEventListener('change',()=>{document.getElementById('personalGarrison').value='';renderPersonalZero();});
+document.getElementById('personalGarrison').addEventListener('change',()=>renderPersonalZeroDetail(personalZeroPcts(document.getElementById('personalVariant').value),guarniciones.filter(g=>normalizePct(personalZeroPcts(document.getElementById('personalVariant').value)[g]??DEFAULT_PCT[normalize(g)]??0)===0).sort((a,b)=>a.localeCompare(b,'es'))));
+function downloadPersonalExcel(){
+ const table=document.getElementById('personalTable');
+ if(!table || !table.querySelector('thead')){alert('No hay una tabla de personal disponible para exportar.');return;}
+ if(typeof XLSX==='undefined'){
+   alert('No se pudo cargar la biblioteca de Excel. Compruebe la conexión a Internet y vuelva a abrir el sistema.');return;
+ }
+ const variantSelect=document.getElementById('personalVariant');
+ const garrisonSelect=document.getElementById('personalGarrison');
+ const variantName=variantSelect.options[variantSelect.selectedIndex]?.text||'Situación actual';
+ const garrisonName=garrisonSelect.value||'Todas las guarniciones';
+ const rows=[
+   ['PERSONAL EN ZONA 0 % — POR JERARQUÍA Y GUARNICIÓN'],
+   ['Situación / variante:',variantName],
+   ['Guarnición seleccionada para el gráfico:',garrisonName],
+   ['Nota: la tabla exportada comprende todas las guarniciones en Zona 0 %, como la tabla en pantalla.'],
+   [],
+ ];
+ for(const tr of table.querySelectorAll('tr')){
+   rows.push(Array.from(tr.querySelectorAll('th,td')).map((cell,i)=>{
+     const raw=cell.textContent.trim();
+     if(i===0 || tr.closest('thead'))return raw;
+     const val=Number(raw.replace(/\./g,'').replace(/,/g,'.'));
+     return Number.isFinite(val)?val:raw;
+   }));
+ }
+ const sheet=XLSX.utils.aoa_to_sheet(rows);
+ sheet['!cols']=rows[5]?.map((_,i)=>({wch:i===0?38:13}))||[];
+ const book=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(book,sheet,'Personal Zona 0');
+ const clean=x=>x.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,55);
+ XLSX.writeFile(book,'Personal_Zona_0_'+clean(variantName)+'.xlsx');
+}
+document.getElementById('personalExcel').addEventListener('click',downloadPersonalExcel);
+document.getElementById('personalPrint').addEventListener('click',()=>window.print());
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('personalView').classList.contains('show'))document.getElementById('personalClose').click();});
 
 loadAll();
 </script>
