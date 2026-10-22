@@ -915,23 +915,48 @@
 @media(max-width:850px){.personal-figures{grid-template-columns:1fr}.personal-content{padding:12px}.personal-controls select{min-width:170px}}
 @media print{body:has(#personalView.show)>*:not(#personalView){display:none!important}#personalView.show{display:block!important;position:static;overflow:visible}#personalView .personal-top button,#personalView .personal-controls{display:none!important}#personalView .personal-content{padding:3mm}#personalView .personal-table-wrap{max-height:none;overflow:visible}#personalView .personal-table{font-size:8px}#personalView .personal-table th,#personalView .personal-table td{padding:3px}#personalView .personal-chart-wrap canvas{max-height:90mm}}
 </style>
+<style id="personal-comparison-styles">
+.personal-variant-picker{display:flex;flex-direction:column;gap:7px;min-width:330px}
+.personal-variant-picker>label{font:700 13px Arial,sans-serif;color:#182241}
+.personal-variant-choices{display:flex;flex-wrap:wrap;gap:7px;max-width:750px}
+.personal-variant-choices label{display:inline-flex!important;flex-direction:row!important;align-items:center;gap:6px;font:600 12px Arial,sans-serif!important;border:1px solid #d1d8e3;border-left:5px solid var(--variant-color,#376694);padding:7px 9px;border-radius:5px;background:#fff;cursor:pointer}
+.personal-variant-choices label.selected{background:#ecf2fa;border-color:#718aad;border-left-color:var(--variant-color,#376694)}
+.personal-variant-choices input{accent-color:#182241;width:15px;height:15px}
+.personal-variant-choices label.disabled{opacity:.48;cursor:not-allowed}
+@media(max-width:800px){.personal-variant-picker{min-width:0;width:100%}}
+</style>
+
+<style id="personal-garrison-multi-styles">
+.personal-garrison-picker{position:relative;min-width:260px;max-width:400px;flex:1;display:flex;flex-direction:column;gap:6px}
+.personal-garrison-picker>label{font:700 13px Arial,sans-serif;color:#182241}
+.personal-garrison-button{width:100%;text-align:left;background:white;color:#182241;border:1px solid #adb5c4;border-radius:4px;padding:9px 12px;font:13px Arial,sans-serif;cursor:pointer;min-height:38px}
+.personal-garrison-menu{position:absolute;top:100%;left:0;right:0;z-index:100;background:#fff;border:1px solid #adb5c4;border-radius:5px;box-shadow:0 8px 25px #14213a30;padding:8px;max-height:340px;overflow:auto}
+.personal-garrison-menu[hidden]{display:none!important}
+.personal-garrison-actions{display:flex;gap:8px;padding-bottom:8px;margin-bottom:5px;border-bottom:1px solid #e1e5ee}
+.personal-garrison-actions button{background:#edf2f9;border:1px solid #b8c5d7;border-radius:4px;padding:5px 10px;cursor:pointer;font:12px Arial,sans-serif}
+.personal-garrison-options{display:flex;flex-direction:column;gap:1px}
+.personal-garrison-option{display:flex!important;flex-direction:row!important;align-items:center;gap:8px!important;padding:5px 6px;border-radius:3px;cursor:pointer;font:13px Arial,sans-serif!important;font-weight:400!important}
+.personal-garrison-option:hover{background:#eef3f9}
+.personal-garrison-option input{width:16px;height:16px;accent-color:#315f9c}
+@media print{#personalView .personal-garrison-menu{display:none!important}}
+</style>
 </head>
 <body>
 
 
 
 <div id="personalView" aria-hidden="true">
-  <div class="personal-top"><div><h2>Personal en Zona 0 % — por jerarquía y guarnición</h2><p>Distribución del personal afectado según la situación o variante seleccionada</p></div><button type="button" id="personalClose" class="btn secondary">Volver al estudio</button></div>
+  <div class="personal-top"><div><h2>Personal en Zona 0 % — por jerarquía y guarnición</h2><p>Comparación de hasta tres situaciones o variantes, con columnas independientes por jerarquía</p></div><button type="button" id="personalClose" class="btn secondary">Volver al estudio</button></div>
   <div class="personal-content">
     <div class="personal-controls">
-      <label>Situación / variante<select id="personalVariant"></select></label>
-      <label>Guarnición en Zona 0 %<select id="personalGarrison"></select></label>
+      <div class="personal-variant-picker"><label>Comparar situaciones / variantes (hasta 3)</label><div id="personalVariantChoices" class="personal-variant-choices"></div></div>
+      <div class="personal-garrison-picker"><label>Guarniciones en Zona 0 % (selección múltiple)</label><button type="button" id="personalGarrisonButton" class="personal-garrison-button" aria-expanded="false">Todas las guarniciones ▾</button><div id="personalGarrisonMenu" class="personal-garrison-menu" hidden><div class="personal-garrison-actions"><button type="button" id="personalGarrisonAll">Todas</button><button type="button" id="personalGarrisonClear">Ninguna</button></div><div id="personalGarrisonOptions" class="personal-garrison-options"></div></div></div>
       <button class="btn" type="button" id="personalExcel">Descargar Excel</button>
       <button class="btn secondary" type="button" id="personalPrint" style="background:#fff;color:#182241;border-color:#9ba5b7">Imprimir / Guardar como PDF</button>
     </div>
     <div class="personal-figures"><div class="personal-figure"><span>Total de personal en Zona 0 %</span><strong id="personalTotal">0</strong></div><div class="personal-figure"><span>Guarniciones en Zona 0 %</span><strong id="personalPlaces">0</strong></div><div class="personal-figure"><span>Personal en la selección del gráfico</span><strong id="personalSelected">0</strong></div></div>
-    <div class="personal-panel"><h3 id="personalChartTitle">Personal por jerarquía</h3><p class="personal-note">Columnas ordenadas de mayor a menor jerarquía. Las cantidades representan efectivos, no importes.</p><div class="personal-chart-wrap"><canvas id="personalChart" height="350"></canvas></div></div>
-    <div class="personal-panel"><h3>Distribución por guarnición y jerarquía</h3><p class="personal-note">Cada fila corresponde a una guarnición con Zona 0 %. Se incluyen los totales por grado y guarnición. Los grados sin personal se muestran en cero.</p><div class="personal-table-wrap"><table class="personal-table" id="personalTable"></table></div></div>
+    <div class="personal-panel"><h3 id="personalChartTitle">Personal por jerarquía</h3><p class="personal-note">Cada color corresponde a una variante; las columnas se ubican una al lado de otra, sin apilarse. Las cantidades representan efectivos, no importes.</p><div class="personal-chart-wrap"><canvas id="personalChart" height="350"></canvas></div></div>
+    <div class="personal-panel"><h3>Distribución por guarnición y jerarquía</h3><p class="personal-note">Cada fila corresponde a una guarnición y variante que tiene Zona 0 %. Los grados sin personal se muestran en cero. En cada variante se incluyen únicamente sus guarniciones en Zona 0 %.</p><div class="personal-table-wrap"><table class="personal-table" id="personalTable"></table></div></div>
   </div>
 </div>
 
@@ -2601,93 +2626,107 @@ document.getElementById('closeProposalsBtn').addEventListener('click',closePropo
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('proposalsView').classList.contains('show'))closeProposals();});
 
 
-/* ==================== PERSONAL EN ZONA 0 % ==================== */
+/* ==================== PERSONAL EN ZONA 0 % / COMPARACIÓN ==================== */
 let personalZeroChart=null;
+const PERSONAL_COLORS=['#315f9c','#d08127','#3e906e'];
+let personalSelections=['current'];
+let personalGarrisonsSelected=new Set(); // Vacío = todas las guarniciones
 function personalCurrentPcts(){const result={};for(const g of guarniciones)result[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);return result;}
 function personalZeroPcts(selection){if(selection==='current')return personalCurrentPcts();if(selection==='working')return pctMatrix;const v=variants[Number(selection)];return v?.pcts||personalCurrentPcts();}
-function openPersonalView(){
- const view=document.getElementById('personalView');view.classList.add('show');view.setAttribute('aria-hidden','false');
- const select=document.getElementById('personalVariant');const prior=select.value||'current';
- select.innerHTML='<option value="current">Situación actual (porcentajes originales)</option><option value="working">Estudio en pantalla (sin guardar)</option>'+variants.map((v,i)=>v?`<option value="${i}">Variante ${i+1} — ${escapeHtml(v.title||'Sin título')}</option>`:'').join('');
- select.value=[...select.options].some(o=>o.value===prior)?prior:'current';renderPersonalZero();
+function personalVariantOptions(){return [{key:'current',name:'Situación actual'},{key:'working',name:'Estudio en pantalla'},...variants.flatMap((v,i)=>v?[{key:String(i),name:'Variante '+(i+1)+' — '+(v.title||'Sin título')}]:[])];}
+function personalVariants(){const available=personalVariantOptions();personalSelections=personalSelections.filter(k=>available.some(v=>v.key===k)).slice(0,3);if(!personalSelections.length)personalSelections=['current'];return personalSelections.map((key,i)=>({...available.find(v=>v.key===key),color:PERSONAL_COLORS[i]}));}
+function renderPersonalChoices(){
+ const opts=personalVariantOptions(),chosen=personalVariants(),box=document.getElementById('personalVariantChoices');
+ box.innerHTML=opts.map(v=>{const index=personalSelections.indexOf(v.key),checked=index>=0,disabled=!checked&&personalSelections.length>=3;return `<label class="${checked?'selected':''} ${disabled?'disabled':''}" style="--variant-color:${checked?PERSONAL_COLORS[index]:'#a0a9b8'}"><input type="checkbox" value="${escapeAttr(v.key)}" ${checked?'checked':''} ${disabled?'disabled':''}><span>${escapeHtml(v.name)}</span></label>`}).join('');
+ box.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{
+   if(input.checked){if(personalSelections.length<3)personalSelections.push(input.value);}else if(personalSelections.length>1){personalSelections=personalSelections.filter(k=>k!==input.value);}else{input.checked=true;return;}
+   renderPersonalZero();
+ }));
+}
+function personalDataset(v){
+ const pcts=personalZeroPcts(v.key),zeroGs=guarniciones.filter(g=>normalizePct(pcts[g]??DEFAULT_PCT[normalize(g)]??0)===0).sort((a,b)=>a.localeCompare(b,'es'));
+ const byG=new Map(zeroGs.map(g=>[g,{}]));
+ for(const p of personas){const row=byG.get(p.guarnicion);if(!row)continue;const code=gradoCode(p.grado)||p.grado||'Sin grado';row[code]=(row[code]||0)+(Number(p.count)||1);}
+ const totals={};let allTotal=0;
+ for(const row of byG.values())for(const [code,n] of Object.entries(row)){totals[code]=(totals[code]||0)+n;allTotal+=n;}
+ return {...v,zeroGs,byG,totals,allTotal};
+}
+function openPersonalView(){const view=document.getElementById('personalView');view.classList.add('show');view.setAttribute('aria-hidden','false');renderPersonalZero();}
+function personalActiveGuarniciones(allGs){
+ return personalGarrisonsSelected.size ? allGs.filter(g=>personalGarrisonsSelected.has(g)) : allGs;
+}
+function renderPersonalGarrisonPicker(allGs){
+ personalGarrisonsSelected=new Set([...personalGarrisonsSelected].filter(g=>allGs.includes(g)));
+ const opts=document.getElementById('personalGarrisonOptions');
+ opts.innerHTML=allGs.map(g=>`<label class="personal-garrison-option"><input type="checkbox" value="${escapeAttr(g)}" ${personalGarrisonsSelected.has(g)?'checked':''}>${escapeHtml(g)}</label>`).join('');
+ opts.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{
+  if(input.checked)personalGarrisonsSelected.add(input.value);else personalGarrisonsSelected.delete(input.value);
+  // Si se desmarca todo, se muestra una selección vacía en lugar de activar 'Todas'.
+  personalGarrisonsSelectionExplicit=true;
+  updatePersonalGarrisonButton(allGs);renderPersonalZeroDetail(personalVariants().map(personalDataset));
+ }));
+ updatePersonalGarrisonButton(allGs);
+}
+let personalGarrisonsSelectionExplicit=false;
+function personalGarrisonsForDisplay(allGs){return personalGarrisonsSelectionExplicit?allGs.filter(g=>personalGarrisonsSelected.has(g)):allGs;}
+function updatePersonalGarrisonButton(allGs){
+ const selected=personalGarrisonsForDisplay(allGs),button=document.getElementById('personalGarrisonButton');
+ button.textContent=!personalGarrisonsSelectionExplicit?'Todas las guarniciones ▾':selected.length===0?'Ninguna guarnición ▾':selected.length===1?selected[0]+' ▾':selected.length+' guarniciones seleccionadas ▾';
 }
 function renderPersonalZero(){
- const pcts=personalZeroPcts(document.getElementById('personalVariant').value);
- const zeroGs=guarniciones.filter(g=>normalizePct(pcts[g]??DEFAULT_PCT[normalize(g)]??0)===0).sort((a,b)=>a.localeCompare(b,'es'));
- const selector=document.getElementById('personalGarrison');const previous=selector.value;
- selector.innerHTML='<option value="">Todas las guarniciones</option>'+zeroGs.map(g=>`<option value="${escapeAttr(g)}">${escapeHtml(g)}</option>`).join('');
- selector.value=zeroGs.includes(previous)?previous:'';
- renderPersonalZeroDetail(pcts,zeroGs);
+ renderPersonalChoices();const data=personalVariants().map(personalDataset);
+ const allGs=[...new Set(data.flatMap(d=>d.zeroGs))].sort((a,b)=>a.localeCompare(b,'es'));
+ renderPersonalGarrisonPicker(allGs);
+ renderPersonalZeroDetail(data);
 }
-function renderPersonalZeroDetail(pcts,zeroGs){
- const selected=document.getElementById('personalGarrison').value;
- const grades=[...GRADE_ORDER];const byG=new Map(zeroGs.map(g=>[g,Object.fromEntries(grades.map(x=>[x,0]))]));
- const other=new Map();
- for(const p of personas){
-   if(!byG.has(p.guarnicion))continue;
-   const code=gradoCode(p.grado)||p.grado||'Sin grado';
-   if(!grades.includes(code)){if(!other.has(code))other.set(code,1);}
-   const row=byG.get(p.guarnicion);row[code]=(row[code]||0)+(Number(p.count)||1);
- }
- for(const code of other.keys())grades.push(code);
- const nfmt=x=>Math.round(x).toLocaleString('es-AR');
- const gTotal=g=>Object.values(byG.get(g)||{}).reduce((a,b)=>a+b,0);
- const allTotal=zeroGs.reduce((n,g)=>n+gTotal(g),0);
- const chosenGs=selected?[selected]:zeroGs;
- const selectedTotal=chosenGs.reduce((n,g)=>n+gTotal(g),0);
- document.getElementById('personalTotal').textContent=nfmt(allTotal);
- document.getElementById('personalPlaces').textContent=nfmt(zeroGs.length);
- document.getElementById('personalSelected').textContent=nfmt(selectedTotal);
- document.getElementById('personalChartTitle').textContent='Personal por jerarquía — '+(selected||'Todas las guarniciones en Zona 0 %');
- const totals=grades.map(code=>chosenGs.reduce((sum,g)=>sum+(byG.get(g)?.[code]||0),0));
- const table=document.getElementById('personalTable');
- let html='<thead><tr><th>Guarnición</th>'+grades.map(g=>`<th>${escapeHtml(g)}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
- for(const g of zeroGs){const row=byG.get(g);html+=`<tr><td>${escapeHtml(g)}</td>`+grades.map(c=>`<td>${nfmt(row[c]||0)}</td>`).join('')+`<td><strong>${nfmt(gTotal(g))}</strong></td></tr>`;}
- html+='</tbody><tfoot><tr><td>TOTAL EN ZONA 0 %</td>'+grades.map(c=>`<td>${nfmt(zeroGs.reduce((sum,g)=>sum+(byG.get(g)?.[c]||0),0))}</td>`).join('')+`<td>${nfmt(allTotal)}</td></tr></tfoot>`;
- table.innerHTML=html;
+function renderPersonalZeroDetail(data){
+ const allGs=[...new Set(data.flatMap(d=>d.zeroGs))].sort((a,b)=>a.localeCompare(b,'es'));
+ const selected=personalGarrisonsForDisplay(allGs),selectedSet=new Set(selected);
+ const grades=[...GRADE_ORDER],extra=new Set();for(const d of data)for(const code of Object.keys(d.totals))if(!grades.includes(code))extra.add(code);grades.push(...[...extra].sort((a,b)=>a.localeCompare(b,'es')));
+ const nfmt=x=>Math.round(x).toLocaleString('es-AR');const sumG=(d,g)=>Object.values(d.byG.get(g)||{}).reduce((a,b)=>a+b,0);
+ const included=d=>d.zeroGs.filter(g=>selectedSet.has(g));
+ const countGrade=(d,c)=>included(d).reduce((a,g)=>a+(d.byG.get(g)?.[c]||0),0);
+ const countTotal=d=>included(d).reduce((a,g)=>a+sumG(d,g),0);
+ document.getElementById('personalTotal').textContent=data.length===1?nfmt(data[0].allTotal):data.map(d=>d.name+': '+nfmt(d.allTotal)).join(' | ');
+ document.getElementById('personalPlaces').textContent=data.length===1?nfmt(data[0].zeroGs.length):data.map(d=>d.name+': '+nfmt(d.zeroGs.length)).join(' | ');
+ document.getElementById('personalSelected').textContent=data.length===1?nfmt(countTotal(data[0])):data.map(d=>d.name+': '+nfmt(countTotal(d))).join(' | ');
+ document.getElementById('personalChartTitle').textContent='Personal por jerarquía — '+(!personalGarrisonsSelectionExplicit?'Todas las guarniciones en Zona 0 %':selected.length===1?selected[0]:selected.length+' guarniciones seleccionadas');
+ const table=document.getElementById('personalTable');let html='<thead><tr><th>Variante / guarnición</th>'+grades.map(g=>`<th>${escapeHtml(g)}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
+ for(const d of data){for(const g of included(d)){
+   const row=d.byG.get(g);html+=`<tr><td style="border-left:5px solid ${d.color}">${escapeHtml(d.name)} — ${escapeHtml(g)}</td>`+grades.map(c=>`<td>${nfmt(row[c]||0)}</td>`).join('')+`<td><strong>${nfmt(sumG(d,g))}</strong></td></tr>`;
+ }html+=`<tr style="font-weight:bold;background:#ecf1f8"><td style="border-left:5px solid ${d.color}">TOTAL — ${escapeHtml(d.name)}</td>`+grades.map(c=>`<td>${nfmt(countGrade(d,c))}</td>`).join('')+`<td>${nfmt(countTotal(d))}</td></tr>`;}
+ table.innerHTML=html+'</tbody>';
  if(personalZeroChart){personalZeroChart.destroy();personalZeroChart=null;}
  const canvas=document.getElementById('personalChart');
- if(typeof Chart==='undefined'){canvas.insertAdjacentHTML('afterend','<p>No se pudo cargar la biblioteca de gráficos. La tabla contiene los datos.</p>');return;}
+ if(typeof Chart==='undefined'){return;}
  personalZeroChart=new Chart(canvas.getContext('2d'),{
- type:'bar',data:{labels:grades,datasets:[{label:'Cantidad de efectivos',data:totals,backgroundColor:'#376694',borderColor:'#182241',borderWidth:1}]},
- options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'Personal: '+nfmt(ctx.parsed.y)}}},scales:{y:{beginAtZero:true,ticks:{precision:0}},x:{title:{display:true,text:'Jerarquía (de mayor a menor)'}}}}
+  type:'bar',data:{labels:grades,datasets:data.map(d=>({label:d.name,data:grades.map(code=>countGrade(d,code)),backgroundColor:d.color,borderColor:d.color,borderWidth:1,barPercentage:.87,categoryPercentage:.82}))},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top'},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+nfmt(ctx.parsed.y)+' efectivos'}}},scales:{x:{stacked:false,title:{display:true,text:'Jerarquía (de mayor a menor)'}},y:{stacked:false,beginAtZero:true,ticks:{precision:0}}}}
  });
 }
 document.getElementById('personalBtn').addEventListener('click',openPersonalView);
 document.getElementById('personalClose').addEventListener('click',()=>{const view=document.getElementById('personalView');view.classList.remove('show');view.setAttribute('aria-hidden','true');});
-document.getElementById('personalVariant').addEventListener('change',()=>{document.getElementById('personalGarrison').value='';renderPersonalZero();});
-document.getElementById('personalGarrison').addEventListener('change',()=>renderPersonalZeroDetail(personalZeroPcts(document.getElementById('personalVariant').value),guarniciones.filter(g=>normalizePct(personalZeroPcts(document.getElementById('personalVariant').value)[g]??DEFAULT_PCT[normalize(g)]??0)===0).sort((a,b)=>a.localeCompare(b,'es'))));
+document.getElementById('personalGarrisonButton').addEventListener('click',()=>{
+ const menu=document.getElementById('personalGarrisonMenu');menu.hidden=!menu.hidden;
+ document.getElementById('personalGarrisonButton').setAttribute('aria-expanded',String(!menu.hidden));
+});
+document.getElementById('personalGarrisonAll').addEventListener('click',()=>{
+ personalGarrisonsSelectionExplicit=false;personalGarrisonsSelected.clear();renderPersonalZero();
+});
+document.getElementById('personalGarrisonClear').addEventListener('click',()=>{
+ personalGarrisonsSelectionExplicit=true;personalGarrisonsSelected.clear();renderPersonalZero();
+});
+document.addEventListener('click',e=>{
+ const picker=e.target.closest('#personalView .personal-garrison-picker');
+ if(!picker){const menu=document.getElementById('personalGarrisonMenu');menu.hidden=true;document.getElementById('personalGarrisonButton').setAttribute('aria-expanded','false');}
+});
 function downloadPersonalExcel(){
- const table=document.getElementById('personalTable');
- if(!table || !table.querySelector('thead')){alert('No hay una tabla de personal disponible para exportar.');return;}
- if(typeof XLSX==='undefined'){
-   alert('No se pudo cargar la biblioteca de Excel. Compruebe la conexión a Internet y vuelva a abrir el sistema.');return;
- }
- const variantSelect=document.getElementById('personalVariant');
- const garrisonSelect=document.getElementById('personalGarrison');
- const variantName=variantSelect.options[variantSelect.selectedIndex]?.text||'Situación actual';
- const garrisonName=garrisonSelect.value||'Todas las guarniciones';
- const rows=[
-   ['PERSONAL EN ZONA 0 % — POR JERARQUÍA Y GUARNICIÓN'],
-   ['Situación / variante:',variantName],
-   ['Guarnición seleccionada para el gráfico:',garrisonName],
-   ['Nota: la tabla exportada comprende todas las guarniciones en Zona 0 %, como la tabla en pantalla.'],
-   [],
- ];
- for(const tr of table.querySelectorAll('tr')){
-   rows.push(Array.from(tr.querySelectorAll('th,td')).map((cell,i)=>{
-     const raw=cell.textContent.trim();
-     if(i===0 || tr.closest('thead'))return raw;
-     const val=Number(raw.replace(/\./g,'').replace(/,/g,'.'));
-     return Number.isFinite(val)?val:raw;
-   }));
- }
- const sheet=XLSX.utils.aoa_to_sheet(rows);
- sheet['!cols']=rows[5]?.map((_,i)=>({wch:i===0?38:13}))||[];
- const book=XLSX.utils.book_new();
- XLSX.utils.book_append_sheet(book,sheet,'Personal Zona 0');
- const clean=x=>x.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,55);
- XLSX.writeFile(book,'Personal_Zona_0_'+clean(variantName)+'.xlsx');
+ const table=document.getElementById('personalTable');if(!table?.querySelector('thead')){alert('No hay tabla disponible.');return;}
+ if(typeof XLSX==='undefined'){alert('No se pudo cargar la biblioteca de Excel. Compruebe la conexión a Internet.');return;}
+ const rows=[['PERSONAL EN ZONA 0 % — COMPARACIÓN POR JERARQUÍA'],['Variantes:',personalVariants().map(v=>v.name).join(' | ')],['Guarniciones seleccionadas:',personalGarrisonsSelectionExplicit?[...personalGarrisonsSelected].join(' | ')||'Ninguna':'Todas las guarniciones'],['Nota: se exporta la tabla visible, por variantes y guarniciones.'],[]];
+ for(const tr of table.querySelectorAll('tr'))rows.push(Array.from(tr.querySelectorAll('th,td')).map((cell,i)=>{const raw=cell.textContent.trim();if(i===0||tr.closest('thead'))return raw;const number=Number(raw.replace(/\./g,'').replace(/,/g,'.'));return Number.isFinite(number)?number:raw;}));
+ const sheet=XLSX.utils.aoa_to_sheet(rows);sheet['!cols']=rows[5]?.map((_,i)=>({wch:i===0?65:13}))||[];
+ const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'Personal Zona 0');XLSX.writeFile(book,'Personal_Zona_0_Comparacion.xlsx');
 }
 document.getElementById('personalExcel').addEventListener('click',downloadPersonalExcel);
 document.getElementById('personalPrint').addEventListener('click',()=>window.print());
