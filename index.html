@@ -2553,6 +2553,7 @@ function renderProposals(){
 function compMoney(n){return money(Math.round(n||0));}
 function compCount(n){return Math.round(n||0).toLocaleString('es-AR');}
 function compDiff(a,b,moneyMode=false){const d=a-b;if(Math.abs(d)<0.5)return 'Sin cambios';return `<span class="${d>0?'comp-more':'comp-less'}">${moneyMode?compMoney(Math.abs(d)):compCount(Math.abs(d))} ${d>0?'Más':'Menos'}</span>`;}
+function compSigned(a,b,moneyMode=false){const n=Math.round((a||0)-(b||0));if(!n)return '<strong>0</strong>';return `<strong class="${n>0?'comp-more':'comp-less'}">${n>0?'+':'−'} ${moneyMode?compMoney(Math.abs(n)):compCount(Math.abs(n))}</strong>`;}
 function compBaseline(){const pcts={};for(const g of guarniciones)pcts[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);return {pcts,refrigerioEnabled:true,refrigerioDays:23,refrigerioGuarniciones:{CABA:true},title:'Situación actual'};}
 function compData(v){
  const m=metricsForPcts(v.pcts,v);
@@ -2573,12 +2574,14 @@ function compTable(indices){
  ${row('Zona 0',x=>names(x.zero),zeroObs)}
  ${row('Total de Personal en Zona 0',x=>compCount(x.m.zero),(x,b)=>compDiff(x.m.zero,b.m.zero))}
  ${row('Personal con refrigerio',x=>`${x.selected.map(g=>`${escapeHtml(g)}: ${compCount(x.byG[g])}`).join('<br>')||'Ninguno'}<br><strong>Total: ${compCount(x.m.refrigerioPeople)}</strong>`,(x,b)=>compDiff(x.m.refrigerioPeople,b.m.refrigerioPeople))}
- ${row('$ Refrigerio',x=>compMoney(x.m.refrigerioTotal),(x,b)=>compDiff(x.m.refrigerioTotal,b.m.refrigerioTotal,true))}
- ${row('$ Zona',x=>compMoney(x.m.zoneTotal),(x,b)=>compDiff(x.m.zoneTotal,b.m.zoneTotal,true))}
+ ${row('$ Refrigerio',x=>`<strong>${compMoney(x.m.refrigerioTotal)}</strong>`,(x,b)=>compDiff(x.m.refrigerioTotal,b.m.refrigerioTotal,true))}
+ ${row('$ Zona',x=>`<strong>${compMoney(x.m.zoneTotal)}</strong>`,(x,b)=>compDiff(x.m.zoneTotal,b.m.zoneTotal,true))}
  ${row('$ Contribuciones Patronales — IAF',x=>compMoney(x.m.contribIAF),(x,b)=>compDiff(x.m.contribIAF,b.m.contribIAF,true))}
  ${row('$ Contribuciones Patronales — OSFA',x=>compMoney(x.m.contribOSFA),(x,b)=>compDiff(x.m.contribOSFA,b.m.contribOSFA,true))}
  ${row('$ Total Contribuciones Patronales',x=>`<strong>${compMoney(x.m.contribTotal)}</strong>`,(x,b)=>compDiff(x.m.contribTotal,b.m.contribTotal,true))}
  ${row('Total Mensual<br>Zona + Refrigerio + Contribuciones Patronales',x=>`<strong>${compMoney(x.m.total)}</strong>`,(x,b)=>compDiff(x.m.total,b.m.total,true))}
+ ${row('Diferencia con Situación Actual — Personal en Zona 0', (x,i)=>compSigned(x.m.zero,d[0].m.zero), (x,b)=>compDiff(x.m.zero,b.m.zero))}
+ ${row('Diferencia con Situación Actual — Costo mensual total', (x,i)=>compSigned(x.m.total,d[0].m.total,true), (x,b)=>compDiff(x.m.total,b.m.total,true))}
  </tbody></table></div>`;
 }
 function printComparison(asPdf){
@@ -2604,15 +2607,44 @@ function printComparison(asPdf){
  </style></head><body><div class="hint">${asPdf?'Para descargar: elegí «Guardar como PDF» como destino en la ventana de impresión.':'Elegí tu impresora en la ventana de impresión.'}</div><h1>Cuadro comparativo — Suplemento de Zona</h1><p>Situación actual y variantes seleccionadas</p>${table}</body></html>`);
  w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
+function exportComparisonExcel(){
+ const table=document.querySelector('#compResult .comp-table');
+ if(!table){proMessage('Cuadro comparativo','Primero genere el cuadro con las variantes seleccionadas.');return;}
+ if(typeof XLSX==='undefined'){proMessage('Descarga de Excel','No se pudo cargar la biblioteca de Excel. Compruebe la conexión a Internet.');return;}
+ const tr=[...table.querySelectorAll('tr')];
+ const getText=(el)=>el.innerText.replace(/\u00a0/g,' ').trim();
+ const parseValue=(t)=>{
+   // Solo cifras simples: preserva descripciones, guarniciones y observaciones como texto.
+   const cleaned=t.replace(/\s/g,'').replace(/−/g,'-');
+   if(/^[+-]\$?[0-9]{1,3}(\.[0-9]{3})*(,[0-9]+)?$/.test(cleaned)||/^[+-]\$?[0-9]+(,[0-9]+)?$/.test(cleaned))return Number(cleaned.replace('$','').replace(/\./g,'').replace(',','.'));
+   if(/^\$?-?[0-9]{1,3}(\.[0-9]{3})*(,[0-9]+)?$/.test(cleaned)||/^\$?-?[0-9]+(,[0-9]+)?$/.test(cleaned)){
+     return Number(cleaned.replace('\$','').replace(/\./g,'').replace(',','.'));
+   }
+   return t;
+ };
+ const rows=[['CUADRO COMPARATIVO — SUPLEMENTO DE ZONA'], ['Variantes seleccionadas y situación actual'], [],
+   ...tr.map((r,ri)=>[...r.querySelectorAll('th,td')].map((cell,ci)=>{
+     const t=getText(cell);
+     return ri===0||ci===0 ? t : parseValue(t);
+   }))];
+ const sh=XLSX.utils.aoa_to_sheet(rows);
+ const cols=tr[0].querySelectorAll('th').length;
+ sh['!cols']=Array.from({length:cols},(_,i)=>({wch:i===0?48:i===cols-1&&cols===4?38:32}));
+ sh['!rows']=rows.map((r,i)=>({hpt:i===0?25:i===1?22:i>=3?Math.min(120,Math.max(24,16*Math.max(...r.map(v=>String(v).split('\n').length)))):18}));
+ sh['!merges']=[{s:{r:0,c:0},e:{r:0,c:cols-1}},{s:{r:1,c:0},e:{r:1,c:cols-1}}];
+ const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sh,'Cuadro comparativo');
+ XLSX.writeFile(book,'Cuadro_Comparativo_Suplemento_Zona.xlsx');
+}
 function openComparison(){
  const panel=document.getElementById('comparisonPanel');panel.hidden=false;
  const saved=variants.map((v,i)=>({v,i})).filter(x=>x.v);
  panel.innerHTML=`<h3 style="margin:0 0 8px">Cuadro comparativo</h3><p>Seleccioná las variantes para compararlas con la situación legal actual (refrigerio en CABA).</p>
  <div class="comp-options">${saved.map(({v,i})=>`<label><input class="comp-choice" type="checkbox" value="${i}" ${saved.length===1?'checked':''}> Variante ${i+1}<small>${escapeHtml(v.title||'Sin título')}</small></label>`).join('')}</div>
- <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compPrint">Imprimir cuadro</button> <button class="btn secondary" id="compPdf">Descargar PDF</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compResult"></div>`;
+ <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compPrint">Imprimir cuadro</button> <button class="btn secondary" id="compPdf">Descargar PDF</button> <button class="btn secondary" id="compExcel">Descargar Excel</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compResult"></div>`;
  panel.querySelector('#compGenerate').onclick=()=>{const ids=[...panel.querySelectorAll('.comp-choice:checked')].map(el=>Number(el.value));panel.querySelector('#compResult').innerHTML=compTable(ids);};
  panel.querySelector('#compPrint').onclick=()=>printComparison(false);
  panel.querySelector('#compPdf').onclick=()=>printComparison(true);
+ panel.querySelector('#compExcel').onclick=exportComparisonExcel;
  panel.querySelector('#compBack').onclick=()=>{panel.hidden=true;};
  if(saved.length===1)panel.querySelector('#compGenerate').click();
 }
