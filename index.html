@@ -940,6 +940,14 @@
 .personal-garrison-option input{width:16px;height:16px;accent-color:#315f9c}
 @media print{#personalView .personal-garrison-menu{display:none!important}}
 </style>
+<style id="personal-per-variant-css">
+#personalView .personal-controls{align-items:flex-start;flex-wrap:wrap}
+.personal-garrison-pickers{display:flex;flex:1 1 100%;flex-wrap:wrap;gap:12px;margin:5px 0}
+.personal-garrison-pickers .personal-garrison-picker{min-width:230px;max-width:none;flex:1 1 260px;padding:10px 12px;background:#f9fafc;border:1px solid #dbe2ed;border-left:5px solid var(--variant-color);border-radius:7px}
+.personal-garrison-pickers .personal-garrison-picker>label{display:block!important;color:#182241;font-weight:700}
+.personal-garrison-pickers .personal-garrison-picker>small{font:12px Arial,sans-serif;color:#596579}
+@media print{#personalGarrisonPickers{display:none!important}}
+</style>
 </head>
 <body>
 
@@ -950,7 +958,7 @@
   <div class="personal-content">
     <div class="personal-controls">
       <div class="personal-variant-picker"><label>Comparar situaciones / variantes (hasta 3)</label><div id="personalVariantChoices" class="personal-variant-choices"></div></div>
-      <div class="personal-garrison-picker"><label>Guarniciones en Zona 0 % (selección múltiple)</label><button type="button" id="personalGarrisonButton" class="personal-garrison-button" aria-expanded="false">Todas las guarniciones ▾</button><div id="personalGarrisonMenu" class="personal-garrison-menu" hidden><div class="personal-garrison-actions"><button type="button" id="personalGarrisonAll">Todas</button><button type="button" id="personalGarrisonClear">Ninguna</button></div><div id="personalGarrisonOptions" class="personal-garrison-options"></div></div></div>
+      <div id="personalGarrisonPickers" class="personal-garrison-pickers"></div>
       <button class="btn" type="button" id="personalExcel">Descargar Excel</button>
       <button class="btn secondary" type="button" id="personalPrint" style="background:#fff;color:#182241;border-color:#9ba5b7">Imprimir / Guardar como PDF</button>
     </div>
@@ -2630,7 +2638,9 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElement
 let personalZeroChart=null;
 const PERSONAL_COLORS=['#315f9c','#d08127','#3e906e'];
 let personalSelections=['current'];
-let personalGarrisonsSelected=new Set(); // Vacío = todas las guarniciones
+const personalGarrisonState=new Map(); // Cada variante mantiene selección y modo propios.
+function selectionForVariant(key){if(!personalGarrisonState.has(key))personalGarrisonState.set(key,{explicit:false,selected:new Set()});return personalGarrisonState.get(key);}
+function includedPersonalGarrisons(d){const state=selectionForVariant(d.key);return state.explicit?d.zeroGs.filter(g=>state.selected.has(g)):d.zeroGs;}
 function personalCurrentPcts(){const result={};for(const g of guarniciones)result[g]=normalizePct(DEFAULT_PCT[normalize(g)]??0);return result;}
 function personalZeroPcts(selection){if(selection==='current')return personalCurrentPcts();if(selection==='working')return pctMatrix;const v=variants[Number(selection)];return v?.pcts||personalCurrentPcts();}
 function personalVariantOptions(){return [{key:'current',name:'Situación actual'},{key:'working',name:'Estudio en pantalla'},...variants.flatMap((v,i)=>v?[{key:String(i),name:'Variante '+(i+1)+' — '+(v.title||'Sin título')}]:[])];}
@@ -2652,45 +2662,39 @@ function personalDataset(v){
  return {...v,zeroGs,byG,totals,allTotal};
 }
 function openPersonalView(){const view=document.getElementById('personalView');view.classList.add('show');view.setAttribute('aria-hidden','false');renderPersonalZero();}
-function personalActiveGuarniciones(allGs){
- return personalGarrisonsSelected.size ? allGs.filter(g=>personalGarrisonsSelected.has(g)) : allGs;
-}
-function renderPersonalGarrisonPicker(allGs){
- personalGarrisonsSelected=new Set([...personalGarrisonsSelected].filter(g=>allGs.includes(g)));
- const opts=document.getElementById('personalGarrisonOptions');
- opts.innerHTML=allGs.map(g=>`<label class="personal-garrison-option"><input type="checkbox" value="${escapeAttr(g)}" ${personalGarrisonsSelected.has(g)?'checked':''}>${escapeHtml(g)}</label>`).join('');
- opts.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{
-  if(input.checked)personalGarrisonsSelected.add(input.value);else personalGarrisonsSelected.delete(input.value);
-  // Si se desmarca todo, se muestra una selección vacía en lugar de activar 'Todas'.
-  personalGarrisonsSelectionExplicit=true;
-  updatePersonalGarrisonButton(allGs);renderPersonalZeroDetail(personalVariants().map(personalDataset));
- }));
- updatePersonalGarrisonButton(allGs);
-}
-let personalGarrisonsSelectionExplicit=false;
-function personalGarrisonsForDisplay(allGs){return personalGarrisonsSelectionExplicit?allGs.filter(g=>personalGarrisonsSelected.has(g)):allGs;}
-function updatePersonalGarrisonButton(allGs){
- const selected=personalGarrisonsForDisplay(allGs),button=document.getElementById('personalGarrisonButton');
- button.textContent=!personalGarrisonsSelectionExplicit?'Todas las guarniciones ▾':selected.length===0?'Ninguna guarnición ▾':selected.length===1?selected[0]+' ▾':selected.length+' guarniciones seleccionadas ▾';
+function renderPersonalGarrisonPickers(data){
+ const holder=document.getElementById('personalGarrisonPickers');
+ holder.innerHTML=data.map(d=>{
+  const st=selectionForVariant(d.key),selected=includedPersonalGarrisons(d),description=!st.explicit?'Todas las guarniciones':selected.length===0?'Ninguna guarnición':selected.length===1?selected[0]:selected.length+' guarniciones seleccionadas';
+  return `<div class="personal-garrison-picker" data-variant="${escapeAttr(d.key)}" style="--variant-color:${d.color}"><label>${escapeHtml(d.name)}</label><small>Guarniciones en Zona 0 % de esta variante</small><button type="button" class="personal-garrison-button" aria-expanded="false">${escapeHtml(description)} ▾</button><div class="personal-garrison-menu" hidden><div class="personal-garrison-actions"><button type="button" data-action="all">Todas</button><button type="button" data-action="clear">Ninguna</button></div><div class="personal-garrison-options">${d.zeroGs.map(g=>`<label class="personal-garrison-option"><input type="checkbox" value="${escapeAttr(g)}" ${st.explicit&&!st.selected.has(g)?'':'checked'}>${escapeHtml(g)}</label>`).join('')}</div></div></div>`;
+ }).join('');
+ holder.querySelectorAll('.personal-garrison-picker').forEach(picker=>{
+  const key=picker.dataset.variant,st=selectionForVariant(key),button=picker.querySelector('.personal-garrison-button'),menu=picker.querySelector('.personal-garrison-menu');
+  button.addEventListener('click',()=>{holder.querySelectorAll('.personal-garrison-menu').forEach(other=>{if(other!==menu){other.hidden=true;other.previousElementSibling.setAttribute('aria-expanded','false');}});menu.hidden=!menu.hidden;button.setAttribute('aria-expanded',String(!menu.hidden));});
+  picker.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{st.explicit=b.dataset.action==='clear';st.selected.clear();renderPersonalZero();}));
+  picker.querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{
+   if(!st.explicit){st.selected=new Set(personalDataset(personalVariants().find(v=>v.key===key)).zeroGs);st.explicit=true;}
+   if(input.checked)st.selected.add(input.value);else st.selected.delete(input.value);
+   renderPersonalZero();
+   const replacement=[...holder.querySelectorAll('.personal-garrison-picker')].find(e=>e.dataset.variant===key);
+   if(replacement){const m=replacement.querySelector('.personal-garrison-menu');m.hidden=false;replacement.querySelector('.personal-garrison-button').setAttribute('aria-expanded','true');}
+  }));
+ });
 }
 function renderPersonalZero(){
  renderPersonalChoices();const data=personalVariants().map(personalDataset);
- const allGs=[...new Set(data.flatMap(d=>d.zeroGs))].sort((a,b)=>a.localeCompare(b,'es'));
- renderPersonalGarrisonPicker(allGs);
- renderPersonalZeroDetail(data);
+ renderPersonalGarrisonPickers(data);renderPersonalZeroDetail(data);
 }
 function renderPersonalZeroDetail(data){
- const allGs=[...new Set(data.flatMap(d=>d.zeroGs))].sort((a,b)=>a.localeCompare(b,'es'));
- const selected=personalGarrisonsForDisplay(allGs),selectedSet=new Set(selected);
+ const included=d=>includedPersonalGarrisons(d);
  const grades=[...GRADE_ORDER],extra=new Set();for(const d of data)for(const code of Object.keys(d.totals))if(!grades.includes(code))extra.add(code);grades.push(...[...extra].sort((a,b)=>a.localeCompare(b,'es')));
  const nfmt=x=>Math.round(x).toLocaleString('es-AR');const sumG=(d,g)=>Object.values(d.byG.get(g)||{}).reduce((a,b)=>a+b,0);
- const included=d=>d.zeroGs.filter(g=>selectedSet.has(g));
  const countGrade=(d,c)=>included(d).reduce((a,g)=>a+(d.byG.get(g)?.[c]||0),0);
  const countTotal=d=>included(d).reduce((a,g)=>a+sumG(d,g),0);
  document.getElementById('personalTotal').textContent=data.length===1?nfmt(data[0].allTotal):data.map(d=>d.name+': '+nfmt(d.allTotal)).join(' | ');
  document.getElementById('personalPlaces').textContent=data.length===1?nfmt(data[0].zeroGs.length):data.map(d=>d.name+': '+nfmt(d.zeroGs.length)).join(' | ');
  document.getElementById('personalSelected').textContent=data.length===1?nfmt(countTotal(data[0])):data.map(d=>d.name+': '+nfmt(countTotal(d))).join(' | ');
- document.getElementById('personalChartTitle').textContent='Personal por jerarquía — '+(!personalGarrisonsSelectionExplicit?'Todas las guarniciones en Zona 0 %':selected.length===1?selected[0]:selected.length+' guarniciones seleccionadas');
+ document.getElementById('personalChartTitle').textContent='Personal por jerarquía — comparación de selecciones independientes';
  const table=document.getElementById('personalTable');let html='<thead><tr><th>Variante / guarnición</th>'+grades.map(g=>`<th>${escapeHtml(g)}</th>`).join('')+'<th>Total</th></tr></thead><tbody>';
  for(const d of data){for(const g of included(d)){
    const row=d.byG.get(g);html+=`<tr><td style="border-left:5px solid ${d.color}">${escapeHtml(d.name)} — ${escapeHtml(g)}</td>`+grades.map(c=>`<td>${nfmt(row[c]||0)}</td>`).join('')+`<td><strong>${nfmt(sumG(d,g))}</strong></td></tr>`;
@@ -2706,24 +2710,14 @@ function renderPersonalZeroDetail(data){
 }
 document.getElementById('personalBtn').addEventListener('click',openPersonalView);
 document.getElementById('personalClose').addEventListener('click',()=>{const view=document.getElementById('personalView');view.classList.remove('show');view.setAttribute('aria-hidden','true');});
-document.getElementById('personalGarrisonButton').addEventListener('click',()=>{
- const menu=document.getElementById('personalGarrisonMenu');menu.hidden=!menu.hidden;
- document.getElementById('personalGarrisonButton').setAttribute('aria-expanded',String(!menu.hidden));
-});
-document.getElementById('personalGarrisonAll').addEventListener('click',()=>{
- personalGarrisonsSelectionExplicit=false;personalGarrisonsSelected.clear();renderPersonalZero();
-});
-document.getElementById('personalGarrisonClear').addEventListener('click',()=>{
- personalGarrisonsSelectionExplicit=true;personalGarrisonsSelected.clear();renderPersonalZero();
-});
 document.addEventListener('click',e=>{
- const picker=e.target.closest('#personalView .personal-garrison-picker');
- if(!picker){const menu=document.getElementById('personalGarrisonMenu');menu.hidden=true;document.getElementById('personalGarrisonButton').setAttribute('aria-expanded','false');}
+ if(e.target.closest('#personalGarrisonPickers'))return;
+ document.querySelectorAll('#personalGarrisonPickers .personal-garrison-menu').forEach(m=>{m.hidden=true;m.previousElementSibling.setAttribute('aria-expanded','false');});
 });
 function downloadPersonalExcel(){
  const table=document.getElementById('personalTable');if(!table?.querySelector('thead')){alert('No hay tabla disponible.');return;}
  if(typeof XLSX==='undefined'){alert('No se pudo cargar la biblioteca de Excel. Compruebe la conexión a Internet.');return;}
- const rows=[['PERSONAL EN ZONA 0 % — COMPARACIÓN POR JERARQUÍA'],['Variantes:',personalVariants().map(v=>v.name).join(' | ')],['Guarniciones seleccionadas:',personalGarrisonsSelectionExplicit?[...personalGarrisonsSelected].join(' | ')||'Ninguna':'Todas las guarniciones'],['Nota: se exporta la tabla visible, por variantes y guarniciones.'],[]];
+ const rows=[['PERSONAL EN ZONA 0 % — COMPARACIÓN POR JERARQUÍA'],['Variantes:',personalVariants().map(v=>v.name).join(' | ')],['Guarniciones por variante:',personalVariants().map(v=>{const d=personalDataset(v),st=selectionForVariant(v.key);return v.name+': '+(st.explicit?(includedPersonalGarrisons(d).join(', ')||'Ninguna'):'Todas las de Zona 0 %');}).join(' | ')],['Nota: se exporta la tabla visible, por variantes y guarniciones.'],[]];
  for(const tr of table.querySelectorAll('tr'))rows.push(Array.from(tr.querySelectorAll('th,td')).map((cell,i)=>{const raw=cell.textContent.trim();if(i===0||tr.closest('thead'))return raw;const number=Number(raw.replace(/\./g,'').replace(/,/g,'.'));return Number.isFinite(number)?number:raw;}));
  const sheet=XLSX.utils.aoa_to_sheet(rows);sheet['!cols']=rows[5]?.map((_,i)=>({wch:i===0?65:13}))||[];
  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'Personal Zona 0');XLSX.writeFile(book,'Personal_Zona_0_Comparacion.xlsx');
