@@ -47,6 +47,32 @@
   .kpi .value{font-family:'Source Serif 4',serif;font-size:1.9rem;font-weight:600;color:var(--navy);}
   .kpi .value small{font-size:1rem;font-weight:400;color:var(--ink-soft);}
 
+  /* Vista estudio: patronales integradas como en el resumen principal */
+  #kpis{margin-bottom:26px;}
+  #patronalKpis.patronal-kpis{
+    width:calc(50% - 1px);
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:1px;
+    margin:-14px 0 30px;
+  }
+  #patronalKpis .kpi{padding:18px 22px;}
+  #refrigToolbar.refrig-top-panel{
+    margin-top:0;
+    padding:6px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:#f8f6ef;
+  }
+  #refrigToolbar .refrig-control-card,
+  #refrigToolbar .refrig-kpi,
+  #refrigToolbar .refrig-grand-kpi{
+    min-height:82px;
+  }
+  @media (max-width:900px){
+    #patronalKpis.patronal-kpis{width:100%;margin:0 0 20px;}
+  }
+
   section{margin-bottom:40px;}
   .section-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid var(--navy);padding-bottom:8px;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
   .section-head h2{font-size:1.15rem;color:var(--navy);}
@@ -937,6 +963,12 @@
   </div>
 
 
+  <div class="kpis patronal-kpis" id="patronalKpis" style="display:none">
+    <div class="kpi"><div class="label">Total Contribuciones Patronales (IAF + OSFA)</div><div class="value" id="kpiPatronal">—</div></div>
+    <div class="kpi"><div class="label">Diferencia con Ajustes — Contribuciones Patronales</div><div class="value" id="kpiPatronalDiff">—</div></div>
+  </div>
+
+
   <div class="refrig-top-panel" id="refrigToolbar" style="display:none;">
     <div class="refrig-control-card">
       <div class="refrig-group">
@@ -971,11 +1003,6 @@
       <div class="value" id="refrigLiveCombined">$ 0</div>
     </div>
   </div>
-  <div class="kpis patronal-kpis" id="patronalKpis" style="display:none;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:-24px;margin-bottom:24px">
-    <div class="kpi"><div class="label">Total Contribuciones Patronales (IAF + OSFA)</div><div class="value" id="kpiPatronal">—</div></div>
-    <div class="kpi"><div class="label">Diferencia con Ajustes — Contribuciones Patronales</div><div class="value" id="kpiPatronalDiff">—</div></div>
-  </div>
-
   <section class="two-col" id="mainGrid" style="display:none;">
     <div>
       <div class="section-head">
