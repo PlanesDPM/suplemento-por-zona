@@ -976,6 +976,7 @@
     </div>
     <div class="proposals-actions">
       <button class="btn" id="comparisonBtn">Cuadro comparativo</button>
+       <button class="btn secondary" id="exportCompTopBtn" type="button">Descargar Excel del cuadro</button>
       <button class="btn secondary" id="printProposalsBtn">Imprimir propuestas</button>
       <button class="btn secondary" id="closeProposalsBtn">Volver al estudio</button>
     </div>
@@ -2635,20 +2636,112 @@ function exportComparisonExcel(){
  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sh,'Cuadro comparativo');
  XLSX.writeFile(book,'Cuadro_Comparativo_Suplemento_Zona.xlsx');
 }
+function selectedComparisonIds(){
+ const checked=[...document.querySelectorAll('#comparisonPanel .comp-choice:checked')].map(e=>Number(e.value));
+ return checked.length?checked:variants.map((v,i)=>v?i:-1).filter(i=>i>=0);
+}
+function exportCurrentComparison(){
+ const result=document.getElementById('compResult');
+ if(!result?.querySelector('.comp-table')){
+   const ids=selectedComparisonIds();
+   if(!ids.length){proMessage('Cuadro comparativo','Guarde una variante para generar el cuadro.');return;}
+   openComparison();
+   const panel=document.getElementById('comparisonPanel');
+   panel.querySelectorAll('.comp-choice').forEach(el=>el.checked=ids.includes(Number(el.value)));
+   panel.querySelector('#compGenerate').click();
+ }
+ exportComparisonExcel();
+}
+function printProposalsWithComparison(){
+ renderProposals();
+ const ids=selectedComparisonIds();
+ if(!ids.length){proMessage('Impresión de propuestas','Primero guarde una variante para generar el cuadro comparativo.');return;}
+ const current=document.querySelector('#compResult .comp-table');
+ const comparison=current?current.outerHTML:(()=>{
+   const holder=document.createElement('div');holder.innerHTML=compTable(ids);
+   return holder.querySelector('table')?.outerHTML||'';
+ })();
+ // Cada propuesta se distribuye en un máximo de 3 hojas A4 apaisadas:
+ // resumen / suben y bajan / se mantienen. Se preservan todas las filas.
+ const cards=[...document.querySelectorAll('#proposalsBody .proposal-card:not(.empty)')].map(el=>{
+   const summary=el.cloneNode(true);
+   summary.querySelector('.proposal-changes')?.remove();
+   summary.querySelectorAll('[contenteditable]').forEach(x=>x.removeAttribute('contenteditable'));
+   const sections=[...el.querySelectorAll('.proposal-change-section')];
+   const upDown=sections.filter(x=>x.querySelector('.proposal-change-label.up, .proposal-change-label.down'));
+   const same=sections.filter(x=>x.querySelector('.proposal-change-label.same'));
+   const title=el.querySelector('.proposal-editable-title')?.textContent?.trim()||'Propuesta';
+   const changePage=(groups,subtitle)=>{
+     if(!groups.length)return '';
+     const count=groups.reduce((a,x)=>a+x.querySelectorAll('.proposal-change').length,0);
+     const density=count>85?'dense-extra':count>62?'dense':'';
+     return `<section class="proposal-sheet detail-sheet ${density}"><div class="sheet-head"><h2>${escapeHtml(title)}</h2><span>${subtitle}</span></div><div class="detail-columns">${groups.map(x=>x.outerHTML).join('')}</div></section>`;
+   };
+   const total=sections.reduce((a,x)=>a+x.querySelectorAll('.proposal-change').length,0);
+   return `<section class="proposal-sheet summary-sheet">${summary.outerHTML}<div class="print-count">Guarniciones detalladas: ${total}. El detalle continúa en las páginas siguientes.</div></section>`+
+     changePage(upDown,'Guarniciones que suben y bajan %')+
+     changePage(same,'Guarniciones que mantienen %');
+ }).join('');
+ const w=window.open('','_blank');
+ if(!w){proMessage('Impresión bloqueada','Permita las ventanas emergentes para imprimir.');return;}
+ w.document.open();w.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Propuestas — Suplemento de Zona</title><style>
+ @page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}
+ body{font:10pt Arial,sans-serif;margin:0;color:#182241;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ .cover{break-after:page;page-break-after:always;min-height:170mm}
+ h1{font-size:16pt;margin:0 0 5mm}h2{font-size:14pt;margin:0 0 4mm}
+ .comp-table{width:100%;table-layout:fixed;border-collapse:collapse;text-align:center;font-size:8pt}
+ .comp-table th,.comp-table td{border:1px solid #fff;padding:4px 3px;overflow-wrap:anywhere;vertical-align:middle}
+ .comp-table th{background:#609bd1!important;color:white!important}.comp-table td{background:#e4eaf4!important}
+ .comp-table tr:nth-child(odd) td{background:#d2dfef!important}.comp-table td:first-child{width:19%;font-weight:bold}
+ .comp-more{color:#bb1421;font-weight:bold}.comp-less{color:#147046;font-weight:bold}
+ /* Impresión controlada: como máximo 3 hojas por propuesta, sin omitir guarniciones. */
+ .proposal-sheet{break-after:page;page-break-after:always;page-break-inside:avoid;min-height:0;height:184mm;overflow:visible}
+ .proposal-pages>.proposal-sheet:last-child{break-after:auto;page-break-after:auto}
+ .proposal-pages>h2{display:none}
+ .summary-sheet .proposal-card{display:block!important;height:auto!important;max-height:none!important;overflow:visible!important;border:1px solid #d2d4da;padding:0;margin:0}
+ .proposal-head{background:#edf0f5;padding:7px 10px;border-bottom:2px solid #182241}
+ .proposal-head h3{margin:0;font-size:13pt}.proposal-rank{display:none}
+ .proposal-metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#d7dce5}
+ .proposal-metric{background:white;padding:8px 10px}.proposal-metric .label{font-size:9pt;color:#576073}
+ .proposal-metric .value{font-size:12pt;font-weight:bold}
+ .proposal-refrig{border:1px solid #d4d9e3;margin:7px 10px;padding:8px;font-size:10pt}
+ .proposal-refrig-head{display:flex;justify-content:space-between;font-weight:bold}
+ .proposal-refrig-list div{display:flex;justify-content:space-between;gap:10px;padding-top:3px}
+ .proposal-combined-total{display:flex;justify-content:space-between;padding:10px;margin:7px 10px;background:#e8f1f7;font-weight:bold;border:1px solid #cdd7e5}
+ .print-count{font-size:9pt;color:#536178;margin:4mm 1mm}
+ .sheet-head{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #182241;padding:0 1mm 3mm;margin-bottom:4mm}
+ .sheet-head h2{font-size:13pt;margin:0}.sheet-head span{font-size:9pt;color:#536178}
+ .detail-columns{column-count:3;column-gap:6mm;column-fill:balance;font-size:8.5pt;line-height:1.18}
+ .proposal-change-section{display:block;break-inside:auto;margin:0 0 3mm}
+ .proposal-change-label{font-size:9pt;font-weight:bold;background:#edf0f3;padding:3px 5px;margin:0 0 2mm;break-after:avoid;page-break-after:avoid}
+ .proposal-change-label.up{background:#e7f3ea;color:#245b34}.proposal-change-label.down{background:#f7e8e6;color:#7b3029}
+ .proposal-change{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;padding:2px 3px;border-bottom:1px solid #ddd;break-inside:avoid;page-break-inside:avoid}
+ .proposal-change .g{white-space:normal;overflow-wrap:break-word}.proposal-change .v{white-space:nowrap;font-weight:bold}
+ .proposal-change.up .v{color:#245b34}.proposal-change.down .v{color:#8a352d}
+ .proposal-order-note{font-weight:normal;font-size:7.5pt}
+ .detail-sheet.dense .detail-columns{font-size:7.6pt;line-height:1.12;column-gap:4mm}
+ .detail-sheet.dense .proposal-change{padding:1.5px 2px}
+ .detail-sheet.dense-extra .detail-columns{font-size:7pt;line-height:1.06;column-gap:4mm}
+ .detail-sheet.dense-extra .proposal-change{padding:1px 2px}
+ </style></head><body><section class="cover"><h1>Cuadro comparativo — Suplemento de Zona</h1>${comparison}</section><section class="proposal-pages">${cards}</section></body></html>`);
+ w.document.close();w.focus();setTimeout(()=>w.print(),350);
+}
 function openComparison(){
  const panel=document.getElementById('comparisonPanel');panel.hidden=false;
  const saved=variants.map((v,i)=>({v,i})).filter(x=>x.v);
  panel.innerHTML=`<h3 style="margin:0 0 8px">Cuadro comparativo</h3><p>Seleccioná las variantes para compararlas con la situación legal actual (refrigerio en CABA).</p>
  <div class="comp-options">${saved.map(({v,i})=>`<label><input class="comp-choice" type="checkbox" value="${i}" ${saved.length===1?'checked':''}> Variante ${i+1}<small>${escapeHtml(v.title||'Sin título')}</small></label>`).join('')}</div>
- <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compPrint">Imprimir cuadro</button> <button class="btn secondary" id="compPdf">Descargar PDF</button> <button class="btn secondary" id="compExcel">Descargar Excel</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compResult"></div>`;
- panel.querySelector('#compGenerate').onclick=()=>{const ids=[...panel.querySelectorAll('.comp-choice:checked')].map(el=>Number(el.value));panel.querySelector('#compResult').innerHTML=compTable(ids);};
+ <div class="comp-controls"><button class="btn" id="compGenerate">Generar cuadro</button> <button class="btn secondary" id="compPrint">Imprimir cuadro</button> <button class="btn secondary" id="compPdf">Descargar PDF</button> <button class="btn secondary" id="compExcel">Descargar Excel</button> <button class="btn secondary" id="compBack">Volver a propuestas</button></div><div id="compDownloadReady" hidden style="margin:12px 0"><button type="button" class="btn" id="compExcelReady">Descargar Excel del cuadro generado</button></div><div id="compResult"></div>`;
+ panel.querySelector('#compGenerate').onclick=()=>{const ids=[...panel.querySelectorAll('.comp-choice:checked')].map(el=>Number(el.value));panel.querySelector('#compResult').innerHTML=compTable(ids);panel.querySelector('#compDownloadReady').hidden=false;};
  panel.querySelector('#compPrint').onclick=()=>printComparison(false);
  panel.querySelector('#compPdf').onclick=()=>printComparison(true);
- panel.querySelector('#compExcel').onclick=exportComparisonExcel;
+ panel.querySelector('#compExcel').onclick=exportCurrentComparison;
+ panel.querySelector('#compExcelReady').onclick=exportCurrentComparison;
  panel.querySelector('#compBack').onclick=()=>{panel.hidden=true;};
  if(saved.length===1)panel.querySelector('#compGenerate').click();
 }
 document.getElementById('comparisonBtn').addEventListener('click',openComparison);
+document.getElementById('exportCompTopBtn').addEventListener('click',exportCurrentComparison);
 
 function openProposals(){
   renderProposals();
@@ -2661,7 +2754,7 @@ function closeProposals(){
 }
 document.getElementById('saveVariantTopBtn').addEventListener('click',openSaveVariantModal);
 document.getElementById('proposalsBtn').addEventListener('click',openProposals);
-document.getElementById('printProposalsBtn').addEventListener('click',()=>window.print());
+document.getElementById('printProposalsBtn').addEventListener('click',printProposalsWithComparison);
 document.getElementById('closeProposalsBtn').addEventListener('click',closeProposals);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('proposalsView').classList.contains('show'))closeProposals();});
 
